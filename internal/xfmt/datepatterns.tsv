@@ -1,0 +1,869 @@
+af	dddd dd MMMM yyyy	dd MMMM yyyy	yyyy-MM-dd	dd MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+af-na	dddd dd MMMM yyyy	dd MMMM yyyy	yyyy-MM-dd	dd MMM yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+af-za	=	af
+agq	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM, yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+agq-cm	=	agq
+ak	ddd, MMMM d, yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	yyyy/M/d	M/d/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+ak-gh	=	ak
+am	dddd d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+am-et	=	am
+ar	dddd، d MMMM yyyy	d MMMM yyyy	d‏/M‏/yyyy	dd‏/MM‏/yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ar-001	=	ar
+ar-ae	=	ar
+ar-bh	=	ar
+ar-dj	=	ar
+ar-dz	=	ar
+ar-eg	=	ar
+ar-eh	=	ar
+ar-er	=	ar
+ar-il	dddd، d MMMM yyyy	d MMMM yyyy	d‏/M‏/yyyy	dd‏/MM‏/yyyy	MMMM yyyy	d MMMM	H:mm:ss	H:mm
+ar-iq	=	ar
+ar-jo	=	ar
+ar-km	dddd، d MMMM yyyy	d MMMM yyyy	d‏/M‏/yyyy	dd‏/MM‏/yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+ar-kw	=	ar
+ar-lb	=	ar
+ar-ly	=	ar
+ar-ma	=	ar-km
+ar-mr	=	ar
+ar-om	=	ar
+ar-ps	=	ar
+ar-qa	=	ar
+ar-sa	=	ar
+ar-sd	=	ar
+ar-so	=	ar
+ar-ss	=	ar
+ar-sy	=	ar
+ar-td	=	ar
+ar-tn	=	ar
+ar-ye	=	ar
+as	dddd, d MMMM, yyyy	d MMMM, yyyy	d-M-yyyy	dd-MM-yyyy	MMMM yyyy	d MMMM	tt h.mm.ss	tt h.mm
+as-in	=	as
+asa	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+asa-tz	=	asa
+ast	dddd, d MMMM 'de' yyyy	d MMMM 'de' yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM 'de' yyyy	d MMMM	HH:mm:ss	HH:mm
+ast-es	=	ast
+az	d MMMM yyyy, dddd	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	dd.MM.yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+az-cyrl	d MMMM yyyy, dddd	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	dd.MM.yy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+az-cyrl-az	=	az-cyrl
+az-latn	=	az
+az-latn-az	=	az
+bas	=	agq
+bas-cm	=	agq
+be	dddd, d MMMM yyyy 'г'.	d MMMM yyyy 'г'.	d.MM.yyyy	d MMM yyyy 'г'.	d.M.yyyy	d.MM.yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+be-by	=	be
+bem	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+bem-zm	=	bem
+bez	=	asa
+bez-tz	=	asa
+bg	dddd, d MMMM yyyy 'г'.	d MMMM yyyy 'г'.	d.MM.yyyy 'г'.	d.MM.yy 'г'.	MMMM yyyy 'г'.	d MMMM	H:mm:ss	H:mm
+bg-bg	=	bg
+bgc	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+bgc-in	=	bgc
+bho	=	bgc
+bho-in	=	bgc
+blo	dddd, MMMM d yyyy	MMMM d yyyy	M/d/yyyy	MMM d yyyy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+blo-bj	=	blo
+bm	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM, yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+bm-ml	=	bm
+bn	dddd, d MMMM, yyyy	d MMMM, yyyy	d/M/yyyy	d MMM, yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+bn-bd	=	bn
+bn-in	=	bn
+bo	yyyy MMMMའི་ཚེས་d, dddd	སྤྱི་ལོ་yyyy MMMMའི་ཚེས་d	yyyy-MM-dd	yyyy ལོའི་MMMཚེས་d	yyyy MMMM	MMMMའི་ཚེས་d	HH:mm:ss	HH:mm
+bo-cn	=	bo
+bo-in	yyyy MMMMའི་ཚེས་d, dddd	སྤྱི་ལོ་yyyy MMMMའི་ཚེས་d	yyyy-MM-dd	yyyy ལོའི་MMMཚེས་d	yyyy MMMM	MMMMའི་ཚེས་d	h:mm:ss tt	h:mm tt
+br	dddd d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+br-fr	=	br
+brx	d MMMM yyyy, dddd	d MMMM, yyyy	dd-MM-yyyy	d MMM, yyyy	MMMM yyyy	MMMM d	tt h:mm:ss	tt नि h:mm
+brx-in	=	brx
+bs	dddd, d. MMMM yyyy.	d. MMMM yyyy.	d. M. yyyy.	d. MMM yyyy.	MMMM yyyy.	d. MMMM	HH:mm:ss	HH:mm
+bs-cyrl	dddd, dd. MMMM yyyy.	dd. MMMM yyyy.	d.M.yyyy.	dd.MM.yyyy.	d.M.yy.	MMMM yyyy.	d. MMMM	HH:mm:ss	HH:mm
+bs-cyrl-ba	=	bs-cyrl
+bs-latn	=	bs
+bs-latn-ba	=	bs
+ca	dddd, d MMMM 'del' yyyy	d MMMM 'del' yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM 'del' yyyy	d MMMM	H:mm:ss	H:mm
+ca-ad	=	ca
+ca-es	=	ca
+ca-fr	=	ca
+ca-it	=	ca
+ccp	=	bn
+ccp-bd	=	bn
+ccp-in	=	bn
+ce	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+ce-ru	=	ce
+ceb	dddd, MMMM d, yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	M/d/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+ceb-ph	=	ceb
+cgg	=	asa
+cgg-ug	=	asa
+chr	dddd, MMMM d, yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	M/d/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+chr-us	=	chr
+ckb	yyyy MMMM d, dddd	dی MMMMی yyyy	yyyy-MM-dd	yyyy MMM d	d/M/yyyy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+ckb-iq	=	ckb
+ckb-ir	g yyyy MMMM d, dddd	dی MMMMی yyyy g	g yyyy-MM-dd	g yyyy MMM d	d/M/yyyy	MMMMی yyyy	MMMM d	HH:mm:ss	HH:mm
+cs	dddd d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	d. M. yyyy	dd.MM.yy	MMMM yyyy	d. MMMM	H:mm:ss	H:mm
+cs-cz	=	cs
+csw	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+csw-ca	=	csw
+cv	dddd, d MMMM yyyy 'ҫ'.	d MMMM yyyy 'ҫ'.	dd.MM.yyyy	d MMM yyyy 'ҫ'.	MMMM yyyy 'ҫ'.	d MMMM	HH:mm:ss	HH:mm
+cv-ru	=	cv
+cy	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	dd/MM/yy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+cy-gb	=	cy
+da	dddd 'den' d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	d. MMM yyyy	d.M.yyyy	MMMM yyyy	d. MMMM	HH.mm.ss	HH.mm
+da-dk	=	da
+da-gl	=	da
+dav	=	asa
+dav-ke	=	asa
+de	dddd, d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	dd.MM.yy	d.M.yyyy	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+de-at	=	de
+de-be	=	de
+de-ch	=	de
+de-de	=	de
+de-it	=	de
+de-li	=	de
+de-lu	=	de
+dje	=	agq
+dje-ne	=	agq
+doi	dddd, d, MMMM yyyy	d, MMMM yyyy	d/M/yyyy	d, MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+doi-in	=	doi
+dsb	dddd, d. MMMM yyyy	d. MMMM yyyy	d.M.yyyy	d.M.yy	MMMM yyyy	d. MMMM	H:mm:ss	H:mm
+dsb-de	=	dsb
+dua	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+dua-cm	=	dua
+dyo	=	dua
+dyo-sn	=	dua
+dz	dddd, སྤྱི་ལོ་yyyy MMMM ཚེས་dd	སྤྱི་ལོ་yyyy MMMM ཚེས་ dd	yyyy-MM-dd	སྤྱི་ལོ་yyyy ཟླ་MMM ཚེས་dd	yyyy-M-d	yyyy MMMM	MMMM d	ཆུ་ཚོད་h:mm:ss tt	ཆུ་ཚོད་ h སྐར་མ་ mm tt
+dz-bt	=	dz
+ebu	=	asa
+ebu-ke	=	asa
+ee	dddd, MMMM d 'lia' yyyy	MMMM d 'lia' yyyy	M/d/yyyy	MMM d 'lia', yyyy	M/d/yy	MMMM yyyy	MMMM d 'lia'	tt 'ga' h:mm:ss	tt 'ga' h:mm
+ee-gh	=	ee
+ee-tg	dddd, MMMM d 'lia' yyyy	MMMM d 'lia' yyyy	M/d/yyyy	MMM d 'lia', yyyy	M/d/yy	MMMM yyyy	MMMM d 'lia'	HH:mm:ss	HH:mm
+el	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+el-cy	=	el
+el-gr	=	el
+en	=	ceb
+en-001	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+en-150	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-ae	=	en-001
+en-ag	=	en-001
+en-ai	=	en-150
+en-as	=	ceb
+en-at	=	en-150
+en-au	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	dd/MM/yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+en-bb	=	en-001
+en-be	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	dd MMM yyyy	d/M/yyyy	dd/MM/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-bi	dddd, MMMM d, yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	M/d/yy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+en-bm	=	en-001
+en-bs	=	en-001
+en-bw	dddd, dd MMMM yyyy	dd MMMM yyyy	dd/MM/yyyy	dd MMM yyyy	dd/MM/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-bz	dddd, dd MMMM yyyy	dd MMMM yyyy	dd/MM/yyyy	dd-MMM-yyyy	dd/MM/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-ca	dddd, MMMM d, yyyy	MMMM d, yyyy	yyyy-MM-dd	MMM d, yyyy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+en-cc	=	en-150
+en-ch	dddd, d MMMM yyyy	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-ck	=	en-150
+en-cm	=	en-150
+en-cx	=	en-150
+en-cy	=	en-001
+en-de	=	en-150
+en-dg	=	en-150
+en-dk	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH.mm.ss	HH.mm
+en-dm	=	en-001
+en-er	=	en-001
+en-fi	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	H.mm.ss	H.mm
+en-fj	=	en-001
+en-fk	=	en-150
+en-fm	=	en-001
+en-gb	=	en-150
+en-gd	=	en-001
+en-gg	=	en-150
+en-gh	=	en-001
+en-gi	=	en-150
+en-gm	=	en-001
+en-gu	=	ceb
+en-gy	=	en-001
+en-hk	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+en-id	=	en-dk
+en-ie	dddd d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-il	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	H:mm:ss	H:mm
+en-im	=	en-150
+en-in	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	dd/MM/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+en-io	=	en-150
+en-je	=	en-150
+en-jm	=	en-001
+en-ke	=	en-150
+en-ki	=	en-001
+en-kn	=	en-001
+en-ky	=	en-001
+en-lc	=	en-001
+en-lr	=	en-001
+en-ls	=	en-001
+en-mg	=	en-150
+en-mh	=	ceb
+en-mo	=	en-001
+en-mp	=	ceb
+en-ms	=	en-150
+en-mt	dddd, d MMMM yyyy	dd MMMM yyyy	dd/MM/yyyy	dd MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-mu	=	en-150
+en-mv	dddd d MMMM yyyy	d MMMM yyyy	d-M-yyyy	dd-MM-yyyy	dd/MM/yyyy	d-M-yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-mw	=	en-001
+en-my	=	en-001
+en-na	=	en-001
+en-nf	=	en-150
+en-ng	=	en-150
+en-nl	=	en-150
+en-nr	=	en-150
+en-nu	=	en-150
+en-nz	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/MM/yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+en-pg	=	en-001
+en-ph	=	ceb
+en-pk	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	dd-MMM-yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+en-pn	=	en-150
+en-pr	=	ceb
+en-pw	=	en-001
+en-rw	=	en-150
+en-sb	=	en-001
+en-sc	=	en-150
+en-sd	=	en-001
+en-se	dddd, d MMMM yyyy	d MMMM yyyy	yyyy-MM-dd	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-sg	=	en-au
+en-sh	=	en-150
+en-si	=	en-150
+en-sl	=	en-001
+en-ss	=	en-001
+en-sx	=	en-150
+en-sz	=	en-001
+en-tc	=	en-001
+en-tk	=	en-150
+en-to	=	en-001
+en-tt	=	en-001
+en-tv	=	en-150
+en-tz	=	en-150
+en-ug	=	en-150
+en-um	=	ceb
+en-us	=	ceb
+en-us-posix	=	ceb
+en-vc	=	en-001
+en-vg	=	en-001
+en-vi	=	ceb
+en-vu	=	en-001
+en-ws	=	en-001
+en-za	dddd, dd MMMM yyyy	dd MMMM yyyy	yyyy/MM/dd	dd MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+en-zm	=	en-001
+en-zw	dddd, dd MMMM yyyy	dd MMMM yyyy	d/M/yyyy	dd MMM,yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+eo	dddd, 'la' d-'a' 'de' MMMM yyyy	yyyy-MMMM-dd	yyyy-MM-dd	yyyy-MMM-dd	yy-MM-dd	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+eo-001	=	eo
+es	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM 'de' yyyy	d 'de' MMMM	H:mm:ss	H:mm
+es-419	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-ar	=	es-419
+es-bo	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/M/yyyy	d MMM 'de' yyyy	d/M/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-br	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM 'de' yyyy	d 'de' MMMM	HH:mm:ss	HH:mm
+es-bz	=	es-br
+es-cl	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	dd-MM-yyyy	dd-MM-yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-co	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/MM/yyyy	d/MM/yy	d/M/yyyy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-cr	=	es-419
+es-cu	=	es-419
+es-do	=	es-419
+es-ea	=	es
+es-ec	=	es-419
+es-es	=	es
+es-gq	=	es
+es-gt	=	es-co
+es-hn	dddd dd 'de' MMMM 'de' yyyy	dd 'de' MMMM 'de' yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-ic	=	es
+es-mx	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	dd/MM/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-ni	=	es-419
+es-pa	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	MM/dd/yyyy	MM/dd/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-pe	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/MM/yyyy	d MMM yyyy	d/M/yyyy	d/MM/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-ph	=	es-419
+es-pr	=	es-pa
+es-py	=	es-419
+es-sv	=	es-419
+es-us	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/M/yyyy	d MMM yyyy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+es-uy	=	es-419
+es-ve	=	es-419
+et	dddd, d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	d. MMM yyyy	d.M.yyyy	dd.MM.yy	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+et-ee	=	et
+eu	yyyy('e')'ko' MMMM'ren' d('a'), dddd	yyyy('e')'ko' MMMM'ren' d('a')	yyyy/M/d	yyyy('e')'ko' MMM d('a')	yy/M/d	yyyy('e')'ko' MMMM	MMMM'ren' d('a')	HH:mm:ss	HH:mm
+eu-es	=	eu
+ewo	=	dua
+ewo-cm	=	dua
+fa	yyyy MMMM d, dddd	d MMMM yyyy	yyyy/M/d	d MMM yyyy	yyyy MMMM	d MMMM	H:mm:ss	H:mm
+fa-af	=	fa
+fa-ir	=	fa
+ff	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM, yyyy	yyyy-MM-dd	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+ff-adlm	dddd d MMMM⹁ yyyy	d MMMM⹁ yyyy	d-M-yyyy	d MMM⹁ yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+ff-adlm-bf	=	ff-adlm
+ff-adlm-cm	=	ff-adlm
+ff-adlm-gh	dddd d MMMM⹁ yyyy	d MMMM⹁ yyyy	d-M-yyyy	d MMM⹁ yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ff-adlm-gm	=	ff-adlm-gh
+ff-adlm-gn	=	ff-adlm
+ff-adlm-gw	=	ff-adlm
+ff-adlm-lr	=	ff-adlm-gh
+ff-adlm-mr	=	ff-adlm-gh
+ff-adlm-ne	=	ff-adlm
+ff-adlm-ng	=	ff-adlm
+ff-adlm-sl	=	ff-adlm-gh
+ff-adlm-sn	=	ff-adlm
+ff-latn	=	ff
+ff-latn-bf	=	ff
+ff-latn-cm	=	ff
+ff-latn-gh	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM, yyyy	yyyy-MM-dd	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ff-latn-gm	=	ff-latn-gh
+ff-latn-gn	=	ff
+ff-latn-gw	=	ff
+ff-latn-lr	=	ff-latn-gh
+ff-latn-mr	=	ff-latn-gh
+ff-latn-ne	=	ff
+ff-latn-ng	=	ff
+ff-latn-sl	=	ff-latn-gh
+ff-latn-sn	=	ff
+fi	dddd d. MMMM yyyy	d. MMMM yyyy	d.M.yyyy	MMMM yyyy	d. MMMM	H.mm.ss	H.mm
+fi-fi	=	fi
+fil	=	ceb
+fil-ph	=	ceb
+fo	dddd, d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	dd.MM.yy	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+fo-dk	=	fo
+fo-fo	=	fo
+fr	=	br
+fr-be	dddd d MMMM yyyy	d MMMM yyyy	d/MM/yyyy	d MMM yyyy	dd/MM/yyyy	d/MM/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+fr-bf	=	br
+fr-bi	=	br
+fr-bj	=	br
+fr-bl	=	br
+fr-ca	dddd d MMMM yyyy	d MMMM yyyy	yyyy-MM-dd	d MMM yyyy	MMMM yyyy	d MMMM	HH 'h' mm 'min' ss 's'	HH 'h' mm
+fr-cd	=	br
+fr-cf	=	br
+fr-cg	=	br
+fr-ch	dddd, d MMMM yyyy	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	dd.MM.yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+fr-ci	=	br
+fr-cm	=	br
+fr-dj	dddd d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+fr-dz	=	fr-dj
+fr-fr	=	br
+fr-ga	=	br
+fr-gf	=	br
+fr-gn	=	br
+fr-gp	=	br
+fr-gq	=	br
+fr-ht	=	br
+fr-km	=	br
+fr-lu	=	br
+fr-ma	=	br
+fr-mc	=	br
+fr-mf	=	br
+fr-mg	=	br
+fr-ml	=	br
+fr-mq	=	br
+fr-mr	=	fr-dj
+fr-mu	=	br
+fr-nc	=	br
+fr-ne	=	br
+fr-pf	=	br
+fr-pm	=	br
+fr-re	=	br
+fr-rw	=	br
+fr-sc	=	br
+fr-sn	=	br
+fr-sy	=	fr-dj
+fr-td	=	fr-dj
+fr-tg	=	br
+fr-tn	=	fr-dj
+fr-vu	=	fr-dj
+fr-wf	=	br
+fr-yt	=	br
+fur	dddd d 'di' MMMM 'dal' yyyy	d 'di' MMMM 'dal' yyyy	dd/MM/yyyy	dd/MM/yy	yyyy-MM-dd	MMMM 'dal' yyyy	d 'di' MMMM	HH:mm:ss	HH:mm
+fur-it	=	fur
+fy	dddd d MMMM yyyy	d MMMM yyyy	dd-MM-yyyy	d MMM yyyy	d-M-yyyy	dd-MM-yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+fy-nl	=	fy
+ga	=	br
+ga-gb	=	br
+ga-ie	=	br
+gaa	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	M/d/yyyy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+gaa-gh	=	gaa
+gd	dddd, d'mh' MMMM yyyy	d'mh' MMMM yyyy	dd/MM/yyyy	d'mh' MMM yyyy	d/M/yyyy	MMMM yyyy	d'mh' MMMM	HH:mm:ss	HH:mm
+gd-gb	=	gd
+gl	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	dd/MM/yyyy	d 'de' MMM 'de' yyyy	d/M/yyyy	dd/MM/yy	MMMM 'de' yyyy	d 'de' MMMM	HH:mm:ss	HH:mm
+gl-es	=	gl
+gsw	dddd, d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	dd.MM.yy	yyyy-MM-dd	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+gsw-ch	=	gsw
+gsw-fr	=	gsw
+gsw-li	=	gsw
+gu	dddd, d MMMM, yyyy	d MMMM, yyyy	d/M/yyyy	d MMM, yyyy	d/M/yy	MMMM yyyy	d MMMM	hh:mm:ss tt	hh:mm tt
+gu-in	=	gu
+guz	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	yyyy-MM-dd	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+guz-ke	=	guz
+gv	=	ce
+gv-im	=	ce
+ha	dddd d MMMM, yyyy	d MMMM, yyyy	d/M/yyyy	d MMM, yyyy	yyyy-MM-dd	d/M/yy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+ha-gh	dddd d MMMM, yyyy	d MMMM, yyyy	d/M/yyyy	d MMM, yyyy	yyyy-MM-dd	d/M/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+ha-ne	=	ha
+ha-ng	=	ha
+haw	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+haw-us	=	haw
+he	dddd, d בMMMM yyyy	d בMMMM yyyy	d.M.yyyy	d בMMM yyyy	MMMM yyyy	d בMMMM	H:mm:ss	H:mm
+he-il	=	he
+hi	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+hi-in	=	hi
+hi-latn	dddd, d MMMM yyyy	d MMMM, yyyy	dd/MM/yyyy	dd MMM, yyyy	d/M/yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+hi-latn-in	=	hi-latn
+hr	dddd, d. MMMM yyyy.	d. MMMM yyyy.	dd. MM. yyyy.	d. MMM yyyy.	MMMM yyyy.	d. MMMM	HH:mm:ss	HH:mm
+hr-ba	dddd, d. MMMM yyyy.	d. MMMM yyyy.	d. M. yyyy.	d. MMM yyyy.	dd. MM. yyyy.	d. M. yy.	MMMM yyyy.	d. MMMM	HH:mm:ss	HH:mm
+hr-hr	=	hr
+hsb	dddd, d. MMMM yyyy	d. MMMM yyyy	d.M.yyyy	d.M.yy	MMMM yyyy	d. MMMM	H:mm:ss	H:mm 'hodź'.
+hsb-de	=	hsb
+hu	yyyy. MMMM d., dddd	yyyy. MMMM d.	yyyy. MM. dd.	yyyy. MMM d.	yyyy. MMMM	MMMM d.	H:mm:ss	H:mm
+hu-hu	=	hu
+hy	yyyy թ. MMMM d, dddd	dd MMMM, yyyy թ.	dd.MM.yyyy	dd MMM, yyyy թ.	dd.MM.yy	yyyy թ․ MMMM	d MMMM	HH:mm:ss	HH:mm
+hy-am	=	hy
+ia	dddd 'le' d 'de' MMMM yyyy	d 'de' MMMM yyyy	dd-MM-yyyy	d MMM yyyy	MMMM yyyy	d 'de' MMMM	HH:mm:ss	HH:mm
+ia-001	=	ia
+id	dddd, dd MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	dd/MM/yy	MMMM yyyy	d MMMM	HH.mm.ss	HH.mm
+id-id	=	id
+ie	dddd d MMMM yyyy	d MMMM yyyy	d.M.yyyy	d MMM yyyy	d.M.yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+ie-ee	=	ie
+ig	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+ig-ng	=	ig
+ii	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM dꑍ	HH:mm:ss	HH:mm
+ii-cn	=	ii
+is	dddd, d. MMMM yyyy	d. MMMM yyyy	d.M.yyyy	d. MMM yyyy	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+is-is	=	is
+it	dddd d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	dd/MM/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+it-ch	dddd, d MMMM yyyy	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	dd/MM/yyyy	dd.MM.yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+it-it	=	it
+it-sm	=	it
+it-va	=	it
+ja	yyyy年M月d日dddd	yyyy年M月d日	yyyy/MM/dd	yyyy/M/d	yyyy年M月	M月d日	H:mm:ss	H:mm
+ja-jp	=	ja
+jgo	dddd, yyyy MMMM dd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	M.d.yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+jgo-cm	=	jgo
+jmc	=	guz
+jmc-tz	=	guz
+jv	dddd, d MMMM yyyy	d MMMM yyyy	dd-MM-yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+jv-id	=	jv
+ka	dddd, dd MMMM, yyyy	d MMMM, yyyy	dd.MM.yyyy	d MMM. yyyy	d.M.yyyy	dd.MM.yy	MMMM, yyyy	d MMMM	HH:mm:ss	HH:mm
+ka-ge	=	ka
+kab	=	ff-latn-gh
+kab-dz	=	ff-latn-gh
+kam	=	guz
+kam-ke	=	guz
+kde	=	guz
+kde-tz	=	guz
+kea	dddd, d 'di' MMMM 'di' yyyy	d 'di' MMMM 'di' yyyy	dd/MM/yyyy	d MMM yyyy	MMMM 'di' yyyy	d 'di' MMMM	HH:mm:ss	HH:mm
+kea-cv	=	kea
+kgp	dddd, d 'ne' MMMM, yyyy	d 'ne' MMMM, yyyy	dd/MM/yyyy	d 'ne' MMM, yyyy	MMMM, yyyy	d 'ne' MMMM	HH:mm:ss	HH:mm
+kgp-br	=	kgp
+khq	=	ff
+khq-ml	=	ff
+ki	=	guz
+ki-ke	=	guz
+kk	yyyy 'ж'. d MMMM, dddd	yyyy 'ж'. d MMMM	dd.MM.yyyy	yyyy 'ж'. dd MMM	dd.MM.yy	yyyy 'ж'. MMMM	d MMMM	HH:mm:ss	HH:mm
+kk-cyrl	=	kk
+kk-cyrl-kz	=	kk
+kk-kz	=	kk
+kkj	dddd dd MMMM yyyy	d MMMM yyyy	dd/MM yyyy	d MMM yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+kkj-cm	=	kkj
+kl	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM d	HH.mm.ss	HH.mm
+kl-gl	=	kl
+kln	=	guz
+kln-ke	=	guz
+km	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+km-kh	=	km
+kn	dddd, MMMM d, yyyy	MMMM d, yyyy	d/M/yyyy	MMM d, yyyy	d/M/yy	MMMM yyyy	d MMMM	hh:mm:ss tt	hh:mm tt
+kn-in	=	kn
+ko	yyyy년 MMMM d일 dddd	yyyy년 MMMM d일	yyyy. M. d.	yy. M. d.	yyyy년 MMMM	MMMM d일	tt h:mm:ss	tt h:mm
+ko-cn	yyyy년 MMMM d일 dddd	yyyy년 MMMM d일	yyyy. M. d.	yy. M. d.	yyyy년 MMMM	MMMM d일	HH:mm:ss	HH:mm
+ko-kp	=	ko
+ko-kr	=	ko
+kok	dddd d MMMM yyyy	d MMMM yyyy	d-M-yyyy	d-MMM-yyyy	d-M-yy	MMMM, yyyy	d MMMM	h:mm:ss tt	h:mm tt
+kok-deva	=	kok
+kok-deva-in	=	kok
+kok-latn	dddd, d MMMM, yyyy	d MMMM, yyyy	d-M-yyyy	d MMM, yyyy	d-M-yy	MMMM yyyy	d MMMM	tt h:mm:ss	tt h:mm
+kok-latn-in	=	kok-latn
+ks	=	chr
+ks-arab	=	chr
+ks-arab-in	=	chr
+ks-deva	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	M/d/yyyy	d/M/yy	yyyy MMMM	MMMM d	tt h:mm:ss	tt h:mm
+ks-deva-in	=	ks-deva
+ksb	=	guz
+ksb-tz	=	guz
+ksf	=	dua
+ksf-cm	=	dua
+ksh	dddd, 'dä' d. MMMM yyyy	d. MMMM yyyy	d. M. yyyy	d. MMM. yyyy	yyyy-MM-dd	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+ksh-de	=	ksh
+ku	dddd, d'ê' MMMM'a' yyyy'an'	d'ê' MMMM'a' yyyy'an'	dd.MM.yyyy	d'ê' MMM'a' yyyy'an'	MMMM'a' yyyy'an'	d'ê' MMMM'ê'	HH:mm:ss	HH:mm
+ku-tr	=	ku
+kw	=	ce
+kw-gb	=	ce
+kxv	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+kxv-deva	=	kxv
+kxv-deva-in	=	kxv
+kxv-latn	=	kxv
+kxv-latn-in	=	kxv
+kxv-orya	=	kxv
+kxv-orya-in	=	kxv
+kxv-telu	=	kxv
+kxv-telu-in	=	kxv
+ky	yyyy-'ж'., d-MMMM, dddd	yyyy-'ж'., d-MMMM	d/M/yyyy	yyyy-'ж'., d-MMM	yyyy-dd-MM	d/M/yy	yyyy-'ж'., MMMM	d-MMMM	HH:mm:ss	HH:mm
+ky-kg	=	ky
+lag	=	guz
+lag-tz	=	guz
+lb	=	et
+lb-lu	=	et
+lg	=	guz
+lg-ug	=	guz
+lij	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	d/M/yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+lij-it	=	lij
+lkt	dddd, MMMM d, yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	yyyy-MM-dd	M/d/yy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+lkt-us	=	lkt
+lmo	=	ce
+lmo-it	=	ce
+ln	=	dua
+ln-ao	=	dua
+ln-cd	=	dua
+ln-cf	=	dua
+ln-cg	=	dua
+lo	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	MMMM yyyy	d MMMM	H:mm:ss	H:mm
+lo-la	=	lo
+lrc	g yyyy MMMM d, dddd	g yyyy MMMM d	g yyyy-MM-dd	g yyyy MMM d	g yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+lrc-iq	=	bgc
+lrc-ir	=	lrc
+lt	yyyy 'm'. MMMM d 'd'., dddd	yyyy 'm'. MMMM d 'd'.	yyyy-MM-dd	yyyy 'm'. MMMM	MMMM d 'd'.	HH:mm:ss	HH:mm
+lt-lt	=	lt
+lu	=	dua
+lu-cd	=	dua
+luo	=	guz
+luo-ke	=	guz
+luy	=	guz
+luy-ke	=	guz
+lv	dddd, yyyy. 'gada' d. MMMM	yyyy. 'gada' d. MMMM	dd.MM.yyyy	yyyy. 'gada' d. MMM	d.MM.yyyy.	dd.MM.yy	yyyy. 'g'. MMMM	d. MMMM	HH:mm:ss	HH:mm
+lv-lv	=	lv
+mai	=	hi
+mai-in	=	hi
+mas	=	guz
+mas-ke	=	guz
+mas-tz	=	guz
+mer	=	guz
+mer-ke	=	guz
+mfe	=	ff
+mfe-mu	=	ff
+mg	dddd d MMMM yyyy	d MMMM yyyy	yyyy-MM-dd	yyyy MMM d	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+mg-mg	=	mg
+mgh	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+mgh-mz	=	mgh
+mgo	dddd, yyyy MMMM dd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+mgo-cm	=	mgo
+mi	dddd, d MMMM yyyy	d MMMM yyyy	dd-MM-yyyy	d MMM yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+mi-nz	=	mi
+mk	dddd, d MMMM yyyy 'г'.	d MMMM yyyy 'г'.	d.M.yyyy	d.M.yyyy 'г'.	d.M.yy	MMMM yyyy 'г'.	d MMMM	HH:mm:ss	HH:mm
+mk-mk	=	mk
+ml	yyyy, MMMM d, dddd	yyyy, MMMM d	d/M/yyyy	yyyy, MMM d	d/M/yy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+ml-in	=	ml
+mn	yyyy 'оны' MMMM'ын' d, dddd 'гараг'	yyyy 'оны' MMMM'ын' d	yyyy.MM.dd	yyyy 'оны' MMM'ын' d	yyyy 'оны' MMMM	MMMM'ын' d	HH:mm:ss	HH:mm
+mn-mn	=	mn
+mni	MMMM d, yyyy, dddd	MMMM d, yyyy	d/M/yyyy	MMM d, yyyy	d/M/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+mni-beng	=	mni
+mni-beng-in	=	mni
+mr	=	bn
+mr-in	=	bn
+ms	dddd, d MMMM yyyy	d MMMM yyyy	d/MM/yyyy	d MMM yyyy	d/M/yyyy	d/MM/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ms-bn	dd MMMM yyyy	d MMMM yyyy	d/MM/yyyy	d MMM yyyy	d/M/yyyy	d/MM/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ms-id	=	id
+ms-my	=	ms
+ms-sg	=	ms
+mt	dddd, d 'ta'’ MMMM yyyy	d 'ta'’ MMMM yyyy	dd/MM/yyyy	dd MMM yyyy	M/d/yyyy	MMMM yyyy	d 'ta'’ MMMM	HH:mm:ss	HH:mm
+mt-mt	=	mt
+mua	=	dua
+mua-cm	=	dua
+my	yyyy MMMM d dddd	yyyy MMMM d	d/M/yyyy	yyyy MMM d	d/M/yy	yyyy MMMM	MMMM d	H:mm:ss	H:mm
+my-mm	=	my
+mzn	=	lrc
+mzn-ir	=	lrc
+naq	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	yyyy-MM-dd	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+naq-na	=	naq
+nb	dddd d. MMMM yyyy	d. MMMM yyyy	dd.MM.yyyy	d. MMM yyyy	d.M.yyyy	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+nb-no	=	nb
+nb-sj	=	nb
+nd	=	guz
+nd-zw	=	guz
+nds	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	d.M.yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+nds-de	=	nds
+nds-nl	=	nds
+ne	yyyy MMMM d, dddd	yyyy MMMM d	yyyy/M/d	yyyy MMM d	yyyy-MM-dd	yy/M/d	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+ne-in	yyyy MMMM d, dddd	yyyy MMMM d	yyyy/M/d	yyyy MMM d	yyyy-MM-dd	yy/M/d	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+ne-np	=	ne
+nl	dddd d MMMM yyyy	d MMMM yyyy	dd-MM-yyyy	d MMM yyyy	d-M-yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+nl-aw	=	nl
+nl-be	dddd d MMMM yyyy	d MMMM yyyy	d/MM/yyyy	d MMM yyyy	d/M/yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+nl-bq	=	nl
+nl-cw	=	nl
+nl-nl	=	nl
+nl-sr	=	nl
+nl-sx	=	nl
+nmg	=	dua
+nmg-cm	=	dua
+nn	=	nb
+nn-no	=	nb
+nnh	dddd , 'lyɛ'̌ʼ d 'na' MMMM, yyyy	'lyɛ'̌ʼ d 'na' MMMM, yyyy	dd/MM/yyyy	d MMM, yyyy	d/M/yyyy	dd/MM/yy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+nnh-cm	=	nnh
+no	=	nb
+nqo	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy / dd / MM	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+nqo-gn	=	nqo
+nso	=	ce
+nso-za	=	ce
+nus	dddd d MMMM yyyy	d MMMM yyyy	d/MM/yyyy	d MMM yyyy	d/M/yyyy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+nus-ss	=	nus
+nyn	=	guz
+nyn-ug	=	guz
+oc	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	dd/MM/yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+oc-es	=	oc
+oc-fr	=	oc
+om	=	ceb
+om-et	=	ceb
+om-ke	=	en-bi
+or	=	chr
+or-in	=	chr
+os	dddd, d MMMM, yyyy 'аз'	d MMMM, yyyy 'аз'	dd.MM.yyyy	dd MMM yyyy 'аз'	yyyy-MM-dd	dd.MM.yy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+os-ge	=	os
+os-ru	=	os
+pa	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+pa-arab	dddd, dd MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	yyyy-MM-dd	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+pa-arab-pk	=	pa-arab
+pa-guru	=	pa
+pa-guru-in	=	pa
+pcm	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	d/M/yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+pcm-ng	=	pcm
+pl	dddd, d MMMM yyyy	d MMMM yyyy	d.MM.yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+pl-pl	=	pl
+prg	=	nds
+prg-pl	=	nds
+ps	dddd د g yyyy د MMMM d	د g yyyy د MMMM d	g yyyy/M/d	g yyyy MMM d	g yyyy-MM-dd	د g yyyy د MMMM	d MMMM	H:mm:ss	H:mm
+ps-af	=	ps
+ps-pk	dddd د yyyy د MMMM d	yyyy MMMM d	yyyy/M/d	yyyy MMM d	yyyy-MM-dd	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+pt	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	dd/MM/yyyy	d 'de' MMM 'de' yyyy	MMMM 'de' yyyy	d 'de' MMMM	HH:mm:ss	HH:mm
+pt-ao	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	dd/MM/yyyy	dd/MM/yy	MMMM 'de' yyyy	d 'de' MMMM	HH:mm:ss	HH:mm
+pt-br	=	pt
+pt-ch	=	pt-ao
+pt-cv	=	pt-ao
+pt-gq	=	pt-ao
+pt-gw	=	pt-ao
+pt-lu	=	pt-ao
+pt-mo	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	dd/MM/yyyy	dd/MM/yy	MMMM 'de' yyyy	d 'de' MMMM	h:mm:ss tt	h:mm tt
+pt-mz	=	pt-ao
+pt-pt	=	pt-ao
+pt-st	=	pt-ao
+pt-tl	=	pt-ao
+qu	dddd, d MMMM, yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	dd-MM-yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+qu-bo	=	qu
+qu-ec	=	qu
+qu-pe	=	qu
+raj	=	bgc
+raj-in	=	bgc
+rm	dddd, 'ils' d MMMM yyyy	d MMMM yyyy	dd-MM-yyyy	dd-MM-yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+rm-ch	=	rm
+rn	=	dua
+rn-bi	=	dua
+ro	=	en-ch
+ro-md	=	en-ch
+ro-ro	=	en-ch
+rof	=	guz
+rof-tz	=	guz
+ru	dddd, d MMMM yyyy 'г'.	d MMMM yyyy 'г'.	dd.MM.yyyy	d MMM yyyy 'г'.	MMMM yyyy 'г'.	d MMMM	HH:mm:ss	HH:mm
+ru-by	=	ru
+ru-kg	=	ru
+ru-kz	=	ru
+ru-md	=	ru
+ru-ru	=	ru
+ru-ua	=	ru
+rw	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	dd-MM-yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+rw-rw	=	rw
+rwk	=	guz
+rwk-tz	=	guz
+sa	=	hi
+sa-in	=	hi
+sah	yyyy 'сыл' MMMM d 'күнэ', dddd	yyyy, MMMM d	yyyy/M/d	yyyy, MMM d	yyyy-MM-dd	yy/M/d	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+sah-ru	=	sah
+saq	=	guz
+saq-ke	=	guz
+sat	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	yyyy-MM-dd	d/M/yy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+sat-olck	=	sat
+sat-olck-in	=	sat
+sbp	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	M/d/yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+sbp-tz	=	sbp
+sc	dddd d 'de' MMMM 'de' 'su' yyyy	d 'de' MMMM 'de' 'su' yyyy	dd/MM/yyyy	d 'de' MMM yyyy	MMMM 'de' 'su' yyyy	d 'de' MMMM	HH:mm:ss	HH:mm
+sc-it	=	sc
+sd	dddd, MMMM d, yyyy	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+sd-arab	=	sd
+sd-arab-pk	=	sd
+sd-deva	=	chr
+sd-deva-in	=	chr
+se	=	ce
+se-fi	dddd d MMMM yyyy	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+se-no	=	ce
+se-se	=	ce
+seh	dddd, d 'de' MMMM 'de' yyyy	d 'de' MMMM 'de' yyyy	d/M/yyyy	d 'de' MMM 'de' yyyy	yyyy-MM-dd	MMMM 'de' yyyy	d MMMM	HH:mm:ss	HH:mm
+seh-mz	=	seh
+ses	=	ff
+ses-ml	=	ff
+sg	=	ff
+sg-cf	=	ff
+shi	=	ff
+shi-latn	=	ff
+shi-latn-ma	=	ff
+shi-tfng	=	ff
+shi-tfng-ma	=	ff
+si	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy-M-d	yyyy MMMM	MMMM d	HH.mm.ss	HH.mm
+si-lk	=	si
+sk	dddd d. MMMM yyyy	d. MMMM yyyy	d. M. yyyy	MMMM yyyy	d. MMMM	H:mm:ss	H:mm
+sk-sk	=	sk
+sl	dddd, d. MMMM yyyy	d. MMMM yyyy	d. M. yyyy	d. MMM yyyy	d. M. yy	MMMM yyyy	d. MMMM	HH:mm:ss	HH:mm
+sl-si	=	sl
+smn	dddd, MMMM d. yyyy	MMMM d. yyyy	d.M.yyyy	MMM d. yyyy	MMMM yyyy	MMMM d.	H.mm.ss	H.mm
+smn-fi	=	smn
+sn	=	ce
+sn-zw	=	ce
+so	dddd, MMMM d, yyyy	MMMM d, yyyy	dd/MM/yyyy	dd-MMM-yyyy	M/d/yyyy	dd/MM/yy	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+so-dj	=	so
+so-et	=	so
+so-ke	dddd, MMMM d, yyyy	MMMM d, yyyy	dd/MM/yyyy	dd-MMM-yyyy	M/d/yyyy	dd/MM/yy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+so-so	=	so
+sq	dddd, d MMMM yyyy	d MMMM yyyy	d.M.yyyy	d MMM yyyy	d.M.yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+sq-al	=	sq
+sq-mk	dddd, d MMMM yyyy	d MMMM yyyy	d.M.yyyy	d MMM yyyy	d.M.yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+sq-xk	=	sq-mk
+sr	dddd, d. MMMM yyyy.	d. MMMM yyyy.	d. M. yyyy.	MMMM yyyy.	d. MMMM	HH:mm:ss	HH:mm
+sr-cyrl	=	sr
+sr-cyrl-ba	=	sr
+sr-cyrl-me	=	sr
+sr-cyrl-rs	=	sr
+sr-cyrl-xk	=	sr
+sr-latn	=	sr
+sr-latn-ba	=	sr
+sr-latn-me	=	sr
+sr-latn-rs	=	sr
+sr-latn-xk	=	sr
+st	=	ce
+st-ls	=	csw
+st-za	=	ce
+su	dddd, d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	H.mm.ss	H.mm
+su-latn	=	su
+su-latn-id	=	su
+sv	dddd d MMMM yyyy	d MMMM yyyy	yyyy-MM-dd	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+sv-ax	=	sv
+sv-fi	=	sv
+sv-se	=	sv
+sw	=	pcm
+sw-cd	=	pcm
+sw-ke	=	pcm
+sw-tz	=	pcm
+sw-ug	=	pcm
+syr	dddd، d ܒMMMM yyyy	d ܒMMMM yyyy	d-MM-yyyy	d ܒMMM yyyy	d/M/yyyy	MMMM yyyy	d ܒMMMM	h:mm:ss tt	h:mm tt
+syr-iq	=	syr
+syr-sy	=	syr
+szl	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	dd.MM.yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+szl-pl	=	szl
+ta	=	bn
+ta-in	=	bn
+ta-lk	dddd, d MMMM, yyyy	d MMMM, yyyy	d/M/yyyy	d MMM, yyyy	d/M/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+ta-my	=	bn
+ta-sg	=	bn
+te	d, MMMM yyyy, dddd	d MMMM, yyyy	dd-MM-yyyy	d MMM, yyyy	d/M/yyyy	dd-MM-yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+te-in	=	te
+teo	=	guz
+teo-ke	=	guz
+teo-ug	=	guz
+tg	dddd, dd MMMM yyyy	dd MMMM yyyy	dd/MM/yyyy	dd MMM yyyy	d.M.yyyy	dd/MM/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+tg-tj	=	tg
+th	ddddที่ d MMMM g yyyy	d MMMM yyyy	d/M/yyyy	d MMM yyyy	d/M/yy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+th-th	=	th
+ti	dddd፣ d MMMM yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	M/d/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ti-er	=	ti
+ti-et	=	ti
+tk	d MMMM yyyy dddd	d MMMM yyyy	dd.MM.yyyy	d MMM yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+tk-tm	=	tk
+tn	=	ce
+tn-bw	=	ce
+tn-za	=	ce
+to	=	el
+to-to	=	el
+tok	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	#yyyy)#M)#d	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+tok-001	=	tok
+tr	d MMMM yyyy dddd	d MMMM yyyy	d.MM.yyyy	d MMM yyyy	dd.MM.yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+tr-cy	d MMMM yyyy dddd	d MMMM yyyy	d.MM.yyyy	d MMM yyyy	dd.MM.yyyy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+tr-tr	=	tr
+tt	d MMMM, yyyy 'ел', dddd	d MMMM, yyyy 'ел'	dd.MM.yyyy	d MMM, yyyy 'ел'	yyyy 'ел', MMMM	d MMMM	H:mm:ss	H:mm
+tt-ru	=	tt
+twq	=	dua
+twq-ne	=	dua
+tzm	=	guz
+tzm-ma	=	guz
+ug	yyyy d-MMMM، dddd	d-MMMM، yyyy	yyyy-MM-dd	d-MMM، yyyy	yyyy-d-M	yyyy MMMM	d-MMMM	HH:mm:ss	HH:mm
+ug-cn	=	ug
+uk	dddd, d MMMM yyyy 'р'.	d MMMM yyyy 'р'.	dd.MM.yyyy	d MMM yyyy 'р'.	dd.MM.yy	MMMM yyyy 'р'.	d MMMM	HH:mm:ss	HH:mm
+uk-ua	=	uk
+ur	dddd، d MMMM، yyyy	d MMMM، yyyy	d/M/yyyy	d MMM، yyyy	d/M/yy	MMMM yyyy	d MMMM	h:mm:ss tt	h:mm tt
+ur-in	=	ur
+ur-pk	=	ur
+uz	dddd, d-MMMM, yyyy	d-MMMM, yyyy	dd/MM/yyyy	d-MMM, yyyy	dd/MM/yy	MMMM, yyyy	d-MMMM	HH:mm:ss	HH:mm
+uz-arab	=	lrc
+uz-arab-af	g yyyy MMMM d, dddd	g yyyy MMMM d	g yyyy-MM-dd	g yyyy MMM d	yyyy-MM-dd	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+uz-cyrl	dddd, dd MMMM, yyyy	d MMMM, yyyy	dd/MM/yyyy	d MMM, yyyy	dd/MM/yy	MMMM, yyyy	d MMMM	HH:mm:ss	HH:mm
+uz-cyrl-uz	=	uz-cyrl
+uz-latn	=	uz
+uz-latn-uz	=	uz
+vai	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	yyyy-MM-dd	MMMM yyyy	MMMM d	h:mm:ss tt	h:mm tt
+vai-latn	dddd, d MMMM yyyy	d MMMM yyyy	dd/MM/yyyy	d MMM yyyy	M/d/yyyy	yyyy MMMM	MMMM d	h:mm:ss tt	h:mm tt
+vai-latn-lr	=	vai-latn
+vai-vaii	=	vai
+vai-vaii-lr	=	vai
+vec	=	it
+vec-it	=	it
+vi	dddd, d MMMM, yyyy	d MMMM, yyyy	d/M/yyyy	d MMM, yyyy	d/M/yy	MMMM 'năm' yyyy	d MMMM	HH:mm:ss	HH:mm
+vi-vn	=	vi
+vmw	=	lij
+vmw-mz	=	lij
+vun	=	guz
+vun-tz	=	guz
+wae	dddd, d. MMMM yyyy	d. MMMM yyyy	yyyy-MM-dd	d. MMM yyyy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+wae-ch	=	wae
+wo	dddd, d MMM, yyyy	d MMMM, yyyy	dd-MM-yyyy	d MMM, yyyy	MMMM yyyy	d MMMM	HH:mm:ss	HH:mm
+wo-sn	=	wo
+xh	=	en-bi
+xh-za	=	en-bi
+xnr	=	hi
+xnr-in	=	hi
+xog	=	guz
+xog-ug	=	guz
+yav	=	dua
+yav-cm	=	dua
+yi	dddd, dטן MMMM yyyy	dטן MMMM yyyy	dd/MM/yyyy	dטן MMM yyyy	d-M-yyyy	dd/MM/yy	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+yi-ua	=	yi
+yo	dddd, d MMM yyyy	d MMM yyyy	d/M/yyyy	d MM yyyy	MMMM yyyy	d MMMM	H:m:s	H:m
+yo-bj	=	yo
+yo-ng	=	yo
+yrl	=	en-150
+yrl-br	=	en-150
+yrl-co	=	en-001
+yrl-ve	=	en-001
+yue	yyyy年M月d日 dddd	yyyy年M月d日	yyyy/M/d	yyyy年M月d日	yyyy年M月	M月d日	tth:mm:ss	tth:mm
+yue-hans	yyyy年M月d日dddd	yyyy年M月d日	yyyy/M/d	yyyy年M月d日	yyyy年M月	M月d日	HH:mm:ss	HH:mm
+yue-hans-cn	=	yue-hans
+yue-hant	=	yue
+yue-hant-cn	=	yue
+yue-hant-hk	=	yue
+za	yyyy MMMM d, dddd	yyyy MMMM d	yyyy-MM-dd	yyyy MMM d	yyyy/M/d	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+za-cn	=	za
+zgh	dddd d MMMM yyyy	d MMMM yyyy	d/M/yyyy	d MMM, yyyy	yyyy-MM-dd	yyyy MMMM	MMMM d	HH:mm:ss	HH:mm
+zgh-ma	=	zgh
+zh	=	yue-hans
+zh-hans	=	yue-hans
+zh-hans-cn	=	yue-hans
+zh-hans-hk	yyyy年M月d日dddd	yyyy年M月d日	d/M/yyyy	yyyy年M月d日	d/M/yy	yyyy年M月	M月d日	tth:mm:ss	tth:mm
+zh-hans-mo	=	zh-hans-hk
+zh-hans-my	yyyy年M月d日dddd	yyyy年M月d日	yyyy/M/d	yyyy年M月d日	yyyy年M月	M月d日	tth:mm:ss	tth:mm
+zh-hans-sg	yyyy年M月d日dddd	yyyy年M月d日	dd/MM/yyyy	yyyy年M月d日	dd/MM/yy	yyyy年M月	M月d日	tth:mm:ss	tth:mm
+zh-hant	=	yue
+zh-hant-hk	yyyy年M月d日dddd	yyyy年M月d日	d/M/yyyy	yyyy年M月d日	yyyy年M月	M月d日	tth:mm:ss	tth:mm
+zh-hant-mo	=	zh-hant-hk
+zh-hant-my	=	yue
+zh-hant-tw	=	yue
+zu	dddd, MMMM d, yyyy	MMMM d, yyyy	M/d/yyyy	MMM d, yyyy	yyyy-MM-dd	M/d/yy	MMMM yyyy	MMMM d	HH:mm:ss	HH:mm
+zu-za	=	zu

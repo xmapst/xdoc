@@ -1,0 +1,46 @@
+# 行尾统一。
+#
+# 这个文件是被一次真实故障逼出来的：仓库在 Windows 侧的编辑器里被打开过，
+# 57 个文件的行尾被批量改成 CRLF，git 于是把它们全部报成「本地改动」，
+# 一次本该干净的 fast-forward 合并被拒绝——而那些文件的内容一个字都没变。
+# 要确认「这些改动是假的」，当时得逐字节比对才敢下结论，代价远大于这几行配置。
+#
+# text=auto 让 git 入库时把文本统一成 LF、检出时写 LF；更关键的是**比较之前
+# 也会先规范化**，因此编辑器再把工作副本存成 CRLF，git 也不会把它看成改动。
+# 跨平台协作时，这一行省下的是「谁都没改，diff 却有几十个文件」这类排查。
+* text=auto eol=lf
+
+# 显式声明二进制，不让 git 的启发式去猜。
+#
+# 猜错的两个方向都难受：把二进制当文本，检出时会改写字节、直接损坏文件；
+# 把文本当二进制，diff 就退化成一行「Binary files differ」，评审时什么都看不到。
+# 后者在本仓库真的发生过——resource/index.html 曾被判成二进制，
+# 而它其实是 22 行纯文本。
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.glb   binary
+*.gltf  binary
+
+# 上面那条误判的补救：HTML 一律按文本处理。
+*.html text
+
+# 配置表显式钉死 LF。
+#
+# 与 `* text=auto` 的效果相同，写出来是为了让它成为一条**看得见**的约定：
+# TSV 按行切分后按 \t 切列，残留的 \r 会跟着最后一列的值一起被读进去，
+# 表现是「最后一列莫名其妙匹配不上」——而 \r 在任何编辑器里都是看不见的，
+# 这种故障从现象反推到行尾几乎不可能。
+*.tsv text eol=lf
+
+# Shell 脚本必须 LF：CRLF 会让 shebang 后面多一个 \r，
+# 内核找不到解释器，报错是「bad interpreter: No such file or directory」，
+# 而路径本身看起来完全正确。
+*.sh text eol=lf

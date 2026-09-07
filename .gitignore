@@ -28,5 +28,22 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+.claude/
+.kilo/
+.codegraph/
+
+# Binary dir
+bin/
+
+# Build artifacts
+node_modules/
+
+# Claude Code
+CLAUDE.md
+
+# Temp or Test artifacts
+.temp/
+.test/
+*.pprof
