@@ -196,12 +196,6 @@ func (p *prepared) close() {
 	}
 }
 
-// prepare 用自己开的事务做准备工作。
-func (e *Executor) prepare(ctx context.Context, collection string,
-	source *virtualSource, q *Query) (*prepared, error) {
-	return e.prepareOn(ctx, nil, collection, source, q)
-}
-
 // prepareOn 开事务、取快照、排出计划。
 //
 // 集合不存在且不是虚拟源时，回一份只标了 missing 的结果，由调用方决定怎么办。
@@ -272,16 +266,6 @@ func (e *Executor) snapshot(ctx context.Context, tx *xtx.Transaction, collection
 		mode = xtx.ModeWrite
 	}
 	return tx.Snapshot(ctx, collection, mode, false)
-}
-
-// collectionPage 取集合的元信息页；集合不存在时返回 nil。
-func (e *Executor) collectionPage(ctx context.Context, tx *xtx.Transaction, collection string,
-	source *virtualSource, q *Query) (*xpage.CollectionPage, error) {
-	s, err := e.snapshot(ctx, tx, collection, source, q)
-	if err != nil || s == nil {
-		return nil, err
-	}
-	return s.CollectionPage(), nil
 }
 
 // run 按计划搭出流水线：先出命中项、再取文档，然后分组或不分组地往下走。

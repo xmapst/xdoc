@@ -145,7 +145,7 @@ func (c *CollectionPage) FreeDataPage(slot uint8) uint32 { return c.freeDataPage
 func (c *CollectionPage) SetFreeDataPage(slot uint8, id uint32) {
 	c.freeDataPages[slot] = id
 	c.putU32(offFreeDataPageList+int(slot)*4, id)
-	c.dirty = true
+	c.dirty.Store(true)
 }
 
 // Indexes 返回全部索引，第一条是主键索引。
@@ -320,7 +320,7 @@ func (c *CollectionPage) UpdateVectorIndex(vx *VectorIndex) error {
 // 先清空整块再写：新表比旧表短时，残留的旧字节会让下次解析
 // 读到多余的条目。
 func (c *CollectionPage) Flush() error {
-	c.dirty = true
+	c.dirty.Store(true)
 	if c.Type() == PageEmpty {
 		return nil
 	}

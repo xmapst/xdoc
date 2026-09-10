@@ -12,6 +12,7 @@ import (
 	"github.com/xmapst/xdoc/internal/xengine"
 	"github.com/xmapst/xdoc/internal/xjson"
 	"github.com/xmapst/xdoc/internal/xpage"
+	"github.com/xmapst/xdoc/internal/xsql"
 	"github.com/xmapst/xdoc/internal/xtx"
 )
 
@@ -317,10 +318,19 @@ const Version = "1.0.0"
 // sysQuery 把一条 SQL 的结果当成集合，这样就能在它外面再套一层查询。
 //
 // 结果里非文档的值包一层 {"expr": ...}：外层查询要的是文档流。
+//
+// 内层只收不带 INTO 的 SELECT：外面是一句读语句，不能借它删集合、重建库或写数据。
 func (db *DB) sysQuery(ctx context.Context, _ *Tx, opts sysOpts) iter.Seq2[*Document, error] {
 	sql, ok := opts.v.AsString()
 	if !ok {
 		return seqErr[*Document](fmt.Errorf("xdoc: $query(sql) requires a string parameter"))
+	}
+	st, err := xsql.Parse(sql)
+	if err != nil {
+		return seqErr[*Document](err)
+	}
+	if st.Kind != xsql.KindSelect || st.Into != "" {
+		return seqErr[*Document](fmt.Errorf("xdoc: $query(sql) only accepts a SELECT statement without INTO"))
 	}
 	return func(yield func(*Document, error) bool) {
 		for v, err := range db.Execute(ctx, sql) {

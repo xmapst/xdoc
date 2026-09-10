@@ -41,6 +41,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -171,10 +172,22 @@ type DB struct {
 	// cursors 记着当前正在遍历的查询，供 $open_cursors 查看。
 	cursors cursorSet
 
+	// fileLocks 让同一个文件同一时刻只有一个写入者，见 [Storage.OpenWrite]。
+	fileLocks fileLockSet
+
 	opts options
 
 	// shared 非空表示这个句柄走共享连接：底层文件按需开关，跨进程锁挡着别人。
 	shared *sharedState
+
+	// gate 是直连模式下的句柄级锁，守着重建时对核心的替换，见 [coreGate]。
+	gate coreGate
+
+	// hooks 是提交后回调与各事务攒下的变更，见 [DB.OnCommit]。
+	hooks commitHooks
+
+	// ttl 是注册过的过期清理，见 [Collection.EnsureTTL]。
+	ttl ttlSet
 }
 
 // executor 返回查询执行器，第一次用到时才建。
@@ -202,6 +215,11 @@ type options struct {
 	coll         xcoll.Collation
 	collSet      bool
 	collErr      error
+	file         fileAccess
+
+	// logger 见 [WithLogger]；stats 是这个句柄的计数，重建与重开时沿用同一份，见 [DB.Stats]。
+	logger *slog.Logger
+	stats  *xtx.Stats
 }
 
 // Option 调整打开库时的行为。
@@ -212,12 +230,14 @@ type Option func(*options)
 // 默认：提交时落盘、用默认映射器、主键发 ObjectId、二进制排序。
 // nil 选项直接跳过，让调用方能写出条件性的选项列表。
 func newOptions(opts []Option) options {
-	o := options{syncOnCommit: true, mapper: xmap.Default, auto: AutoIDObjectID, coll: xcoll.Default}
+	o := options{syncOnCommit: true, mapper: xmap.Default, auto: AutoIDObjectID, coll: xcoll.Default,
+		stats: new(xtx.Stats)}
 	for _, fn := range opts {
 		if fn != nil {
 			fn(&o)
 		}
 	}
+	o.file = o.file.resolve()
 	return o
 }
 
@@ -297,6 +317,8 @@ func (o options) nowOrDefault() time.Time {
 // 带 [WithAutoRebuild] 时，遇到"要先重建"会重建一次再开；重建也失败的话，
 // 两个错误一起返回，好看出到底是哪一步卡住的。
 //
+// 文件不存在、却还留着 -backup 或重建临时文件时报错而不新建：那多半是一次被打断的重建。
+//
 // 用完要 Close。
 func Open(path string, opts ...Option) (*DB, error) {
 	o := newOptions(opts)
@@ -307,9 +329,12 @@ func Open(path string, opts ...Option) (*DB, error) {
 	if o.conn == ConnectionShared {
 		return o.newSharedDB(path)
 	}
+	if err := checkRebuildLeftovers(path); err != nil {
+		return nil, err
+	}
 	core, err := o.openOptions().OpenFile(path)
 	if err != nil && o.autoRebuild && errors.Is(err, xtx.ErrNeedsRebuild) {
-		if _, rerr := o.rebuildFile(path, opts); rerr != nil {
+		if _, rerr := o.autoRebuildFile(path, opts); rerr != nil {
 			return nil, errors.Join(err, rerr)
 		}
 		core, err = o.openOptions().OpenFile(path)
@@ -371,6 +396,9 @@ func (o options) openOptions() xtx.OpenOptions {
 		Now:          o.now,
 		Password:     o.password,
 		InitialSize:  o.initialSize,
+
+		Stats:  o.stats,
+		Logger: o.logger,
 	}
 }
 
@@ -421,7 +449,7 @@ func (o options) newDB(core *xtx.Core) *DB {
 		}
 		return xbexpr.ExecuteScalar(pe.node, doc, nil, coll)
 	}
-	return &DB{
+	db := &DB{
 		core:     core,
 		engine:   xengine.New(core, core.Collation(), keys, scalar),
 		mapper:   o.mapper,
@@ -429,12 +457,22 @@ func (o options) newDB(core *xtx.Core) *DB {
 		password: o.password,
 		opts:     o,
 	}
+	db.gate.exitFn = db.gate.exit
+	db.engine.SetObserver(&db.hooks)
+	return db
 }
 
 // Close 关掉这份库。
 //
 // 执行器与底层都要关，两边的错误合并返回：先关执行器失败也不能不关文件。
+// 过期清理先停下并等它退出，见 [Collection.EnsureTTL]。
 func (db *DB) Close() error {
+	db.ttl.stop()
+	return db.closeHandle()
+}
+
+// closeHandle 是 [DB.Close] 去掉停过期清理的那部分，重建换核心时用它。
+func (db *DB) closeHandle() error {
 	if db.shared != nil {
 		return db.closeShared()
 	}
@@ -461,6 +499,8 @@ func (db *DB) CollectionNames() []string {
 
 // DropCollection 删掉一个集合，本来就不存在时返回 false 而不报错。
 func (db *DB) DropCollection(ctx context.Context, name string) (bool, error) {
+	ctx, box := db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := db.enter(ctx)
 	if err != nil {
 		return false, err
@@ -471,6 +511,8 @@ func (db *DB) DropCollection(ctx context.Context, name string) (bool, error) {
 
 // RenameCollection 给集合改名，源集合不存在时返回 false 而不报错。
 func (db *DB) RenameCollection(ctx context.Context, old, name string) (bool, error) {
+	ctx, box := db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := db.enter(ctx)
 	if err != nil {
 		return false, err
@@ -481,7 +523,7 @@ func (db *DB) RenameCollection(ctx context.Context, old, name string) (bool, err
 
 // Checkpoint 把日志里的页搬回数据文件，返回搬了几页。
 //
-// 平时到了阈值会自动做；手工调用是为了在关库前或备份前把日志清空。
+// 平时到了阈值会自动做；手工调用是为了在关库前把日志清空。备份别拷文件，用 [DB.Backup]。
 func (db *DB) Checkpoint(ctx context.Context) (int, error) {
 	rel, err := db.enter(ctx)
 	if err != nil {

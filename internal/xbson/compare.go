@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/xmapst/xdoc/internal/xbin"
 	"github.com/xmapst/xdoc/internal/xcoll"
 )
 
@@ -77,6 +78,59 @@ func (v *Value) Compare(b *Value, c xcoll.Collation) int {
 // Equal 判断两个值是否相等。
 func (v *Value) Equal(b *Value, c xcoll.Collation) bool { return v.Compare(b, c) == 0 }
 
+// BinaryKey 是值按 [xcoll.Binary] 判等时的身份，可以当 map 的键用。
+//
+// 对 ok 为真的两个值，a.Compare(b, xcoll.Binary) == 0 当且仅当两者的 BinaryKey 相等。
+type BinaryKey struct {
+	t   Type
+	num int64
+	raw [16]byte
+	str string
+}
+
+// BinaryKey 算出值按二进制序判等的身份。
+//
+// 整数与整值浮点跨类型相等，所以都归到 int64 上；NaN 彼此相等，±0 也相等。
+// 小数（与其他数字跨类型相等，归一代价太大）、文档、数组、向量没有这样的身份，
+// ok 为假，调用方得退回逐个 Compare。
+func (v *Value) BinaryKey() (BinaryKey, bool) {
+	if v == nil {
+		v = Null
+	}
+	switch v.t {
+	case TypeMinValue, TypeNull, TypeMaxValue:
+		return BinaryKey{t: v.t}, true
+	case TypeBoolean, TypeDateTime:
+		return BinaryKey{t: v.t, num: v.num}, true
+	case TypeInt32, TypeInt64:
+		return BinaryKey{t: TypeInt64, num: v.num}, true
+	case TypeDouble:
+		const twoPow63 = 9223372036854775808.0
+		f := v.flt
+		switch {
+		case math.IsNaN(f):
+			return BinaryKey{t: TypeDouble, num: int64(math.Float64bits(math.NaN()))}, true
+		case f == math.Trunc(f) && f >= -twoPow63 && f < twoPow63:
+			return BinaryKey{t: TypeInt64, num: int64(f)}, true
+		}
+		return BinaryKey{t: TypeDouble, num: int64(math.Float64bits(f))}, true
+	case TypeString:
+		return BinaryKey{t: v.t, str: v.str}, true
+	case TypeBinary:
+		b, _ := v.AsBinary()
+		return BinaryKey{t: v.t, str: string(b)}, true
+	case TypeObjectID:
+		k := BinaryKey{t: v.t}
+		id, _ := v.AsObjectID()
+		copy(k.raw[:], id[:])
+		return k, true
+	case TypeGUID:
+		g, _ := v.AsGUID()
+		return BinaryKey{t: v.t, raw: g}, true
+	}
+	return BinaryKey{}, false
+}
+
 // compareDocument 逐键比较两篇文档，键少的排前面。
 //
 // **按左边那篇的键名去右边取值**：右边没有这个键时取到空值。
@@ -85,14 +139,14 @@ func (v *Value) Equal(b *Value, c xcoll.Collation) bool { return v.Compare(b, c)
 // 排序规则参数被忽略，一律按二进制比：文档作为索引键时必须有一个
 // 与语言无关的确定次序。
 func (d *Document) compareDocument(y *Document, _ xcoll.Collation) int {
-	xk, yk := d.Keys(), y.Keys()
-	n := min(len(xk), len(yk))
-	for i := range n {
-		if r := d.Get(xk[i]).compareElem(y.Get(xk[i]), xcoll.Binary); r != 0 {
+	// 直接遍历内部切片：比较只读不写，不必像 [Document.Keys] 那样复制一份。
+	n := min(len(d.keys), len(y.keys))
+	for i, k := range d.keys[:n] {
+		if r := d.vals[i].compareElem(y.Get(k), xcoll.Binary); r != 0 {
 			return r
 		}
 	}
-	return cmp.Compare(len(xk), len(yk))
+	return cmp.Compare(len(d.keys), len(y.keys))
 }
 
 // compareElem 比较容器里的一个元素。
@@ -149,14 +203,38 @@ func (v *Value) compareNumber(b *Value) int {
 	}
 }
 
-// compareExact 用有理数精确比较，先处理 NaN 与无穷。
+// compareExact 精确比较，先处理 NaN 与无穷。
 //
 // 有理数表示不了那三个值，所以要单独排序。
+//
+// 没有浮点参与时（十进制数对整数）把整数转成十进制数直接比，不必造有理数；
+// 有浮点参与时浮点可能超出十进制数的范围或精度，仍走有理数。
 func (v *Value) compareExact(b *Value) int {
 	if r, ok := v.compareSpecial(b); ok {
 		return r
 	}
+	if v.t != TypeDouble && b.t != TypeDouble {
+		return v.toDecimal().Compare(b.toDecimal())
+	}
 	return v.toRat().Cmp(b.toRat())
+}
+
+// toDecimal 把十进制数或整数值转成十进制数。
+//
+// 整数的绝对值不超过 2^63，放得进 96 位尾数的低 64 位，小数位数取零，
+// 所以转换是精确的。取绝对值用无符号取反：最小的 int64 取反会溢出，
+// 转成 uint64 再取反恰好得到 2^63。
+func (v *Value) toDecimal() xbin.Decimal {
+	if v.t == TypeDecimal {
+		d, _ := v.AsDecimal()
+		return d
+	}
+	u := uint64(v.num)
+	if v.num < 0 {
+		u = -u
+	}
+	d, _ := xbin.DecimalFromParts(uint32(u), uint32(u>>32), 0, 0, v.num < 0)
+	return d
 }
 
 // compareSpecial 比较 NaN 与无穷，两边都不是特殊值时报 false。

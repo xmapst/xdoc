@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -64,7 +65,15 @@ type Core struct {
 
 	checkpointPages atomic.Int32
 
+	// forceCheckpointAt 是日志涨到几页时提交才再去排队等排他闸门，0 表示按阈值的
+	// [forceCheckpointFactor] 倍。排队落空一次就翻倍，检查点做成后归零。
+	forceCheckpointAt atomic.Int64
+
 	dateLoc atomic.Pointer[time.Location]
+
+	// stats 是运行期计数，logger 记少见的事件（为 nil 时不记），见 [Stats]。
+	stats  *Stats
+	logger *slog.Logger
 
 	// txMu 保护 open 与 budget。
 	txMu   sync.Mutex
@@ -75,11 +84,22 @@ type Core struct {
 // NewCore 组装一个实例，并从头页读入运行期设置。
 func NewCore(d *xdisk.Disk, w *xwal.Index, h *xpage.HeaderPage, hbuf []byte,
 	cacheSize int, coll xcoll.Collation) *Core {
+	return newCore(d, w, h, hbuf, cacheSize, coll, nil, nil)
+}
+
+// newCore 同 [NewCore]，计数记进 st（为 nil 时自备一份），事件记到 logger。
+func newCore(d *xdisk.Disk, w *xwal.Index, h *xpage.HeaderPage, hbuf []byte,
+	cacheSize int, coll xcoll.Collation, st *Stats, logger *slog.Logger) *Core {
+	if st == nil {
+		st = new(Stats)
+	}
 	c := &Core{
 		disk:      d,
 		wal:       w,
-		cache:     NewCache(cacheSize),
-		locks:     NewLockService(),
+		cache:     newCache(cacheSize, st),
+		locks:     newLockService(st, logger),
+		stats:     st,
+		logger:    logger,
 		header:    h,
 		headerBuf: hbuf,
 		coll:      coll,
@@ -123,7 +143,10 @@ var ErrClosed = errors.New("xtx: database is closed")
 
 // markBroken 把实例封死。只记第一个错误——后面那些多半是它引发的。
 func (c *Core) markBroken(err error) {
-	c.broken.CompareAndSwap(nil, &err)
+	if c.broken.CompareAndSwap(nil, &err) {
+		logEvent(context.Background(), c.logger, slog.LevelError,
+			"xdoc: database instance broken; reopen it", slog.Any("error", err))
+	}
 	c.MarkNeedsRebuild(err)
 }
 

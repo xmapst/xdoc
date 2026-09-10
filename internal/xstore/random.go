@@ -33,7 +33,7 @@ func newRandomizer(seed int32) *randomizer {
 			sub = -sub
 		}
 	}
-	mj := int32(randSeed - sub)
+	mj := randSeed - sub
 	r.state[55] = mj
 	mk := int32(1)
 	for i := 1; i <= 54; i++ {

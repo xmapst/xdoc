@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"slices"
+	"unsafe"
 
 	"github.com/xmapst/xdoc/internal/xbson"
 	"github.com/xmapst/xdoc/internal/xcoll"
@@ -157,7 +158,11 @@ func (s *Sorter) Insert(items iter.Seq2[*xbson.Value, xpage.Address]) error {
 	return s.flush(batch, len(s.runs) == 0)
 }
 
-// itemSize 算出一条记录占多少字节，键太大或类型不能当键时报错。
+// itemSize 估算一条记录在内存里占多少字节，键太大或类型不能当键时报错。
+//
+// 批里存的是解码后的键，**堆上的占用是编码字节的好几倍**，只按编码大小攒段
+// 管不住内存。所以在编码大小之上再加批里的槽位和键的对象开销；
+// 估算值不小于编码大小，攒出来的段照样放得进磁盘上的一段。
 func (s *Sorter) itemSize(key *xbson.Value) (int, error) {
 	n, err := key.IndexKeySize()
 	switch {
@@ -166,7 +171,35 @@ func (s *Sorter) itemSize(key *xbson.Value) (int, error) {
 	case err != nil:
 		return 0, fmt.Errorf("xsort: cannot use %s as a sort key: %w", key.Type(), err)
 	}
-	return n + xpage.AddressSize, nil
+	return n + xpage.AddressSize + itemOverhead + heapOverhead(key), nil
+}
+
+// 估算堆占用用到的几个对象大小。
+var (
+	itemOverhead     = int(unsafe.Sizeof(item{}))
+	valueOverhead    = int(unsafe.Sizeof(xbson.Value{}))
+	arrayOverhead    = int(unsafe.Sizeof(xbson.Array{}))
+	documentOverhead = int(unsafe.Sizeof(xbson.Document{}))
+	pointerOverhead  = int(unsafe.Sizeof(uintptr(0)))
+	stringOverhead   = int(unsafe.Sizeof(""))
+)
+
+// heapOverhead 估算一个值在堆上比编码多占的字节：值对象本身，
+// 数组与文档再加上容器和各项。字符串之类的载荷已经算在编码大小里了。
+func heapOverhead(v *xbson.Value) int {
+	n := valueOverhead
+	if a, ok := v.AsArray(); ok {
+		n += arrayOverhead
+		for _, it := range a.Items() {
+			n += pointerOverhead + heapOverhead(it)
+		}
+	} else if d, ok := v.AsDocument(); ok {
+		n += documentOverhead
+		for _, val := range d.Elements() {
+			n += stringOverhead + pointerOverhead + heapOverhead(val)
+		}
+	}
+	return n
 }
 
 // flush 把一批记录排好序并编成字节。

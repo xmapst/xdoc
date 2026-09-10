@@ -234,7 +234,7 @@ func (c Collation) Compare(a, b string) int {
 		return c.cmp.compare(a, b)
 	}
 	if c.ignoreCase {
-		return cmpUnits(upperFold(a), upperFold(b))
+		return cmpFold(a, b)
 	}
 	return cmpUnits(a, b)
 }
@@ -269,16 +269,7 @@ func cmpUnits(a, b string) int {
 			continue
 		}
 		if ra != rb {
-			if ua, ub := leadUnit(ra), leadUnit(rb); ua != ub {
-				if ua < ub {
-					return -1
-				}
-				return 1
-			}
-			if ra < rb {
-				return -1
-			}
-			return 1
+			return cmpRune(ra, rb)
 		}
 		a, b = a[na:], b[nb:]
 	}
@@ -299,6 +290,20 @@ func cmpByte(x, y byte) int {
 	return 1
 }
 
+// cmpRune 按 UTF-16 编码单元序比较两个不相等的码点。
+func cmpRune(x, y rune) int {
+	if ux, uy := leadUnit(x), leadUnit(y); ux != uy {
+		if ux < uy {
+			return -1
+		}
+		return 1
+	}
+	if x < y {
+		return -1
+	}
+	return 1
+}
+
 // leadUnit 返回一个码点在 UTF-16 里的首个编码单元，辅助平面取高位代理。
 func leadUnit(r rune) rune {
 	if r >= 0x10000 {
@@ -307,36 +312,86 @@ func leadUnit(r rune) rune {
 	return r
 }
 
-// upperFold 逐字符转大写。
+// cmpFold 忽略大小写比较：结果等同于两边逐字符转大写后再 [cmpUnits]，
+// 但边解码边转，不复制整串。
 //
 // 统一成大写而不是小写：两者的映射不是互逆的，选哪一边决定了哪些字符
 // 会被当作相等，这是文件格式的一部分。
 //
-// 先扫一遍看有没有要改的，没有就原样返回，省掉一次分配。
-func upperFold(s string) string {
-	need := false
-	for _, r := range s {
-		if unicode.ToUpper(r) != r {
-			need = true
-			break
-		}
-	}
-	if !need {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	for i := 0; i < len(s); {
-		r, n := utf8.DecodeRuneInString(s[i:])
-		if n == 1 && r == utf8.RuneError {
-			b.WriteByte(s[i])
-			i++
+// 非法字节原样保留、按原始字节比。它和对面的合法字符比时，比的是那个字符
+// 转大写后编码的首字节；首字节相同则剩下的尾字节挂起，接着逐字节比。
+func cmpFold(a, b string) int {
+	ca, cb := foldCursor{s: a}, foldCursor{s: b}
+	for !ca.done() && !cb.done() {
+		ra, na, rawA := ca.peek()
+		rb, nb, rawB := cb.peek()
+		if rawA || rawB {
+			if x, y := ca.takeByte(ra, na, rawA), cb.takeByte(rb, nb, rawB); x != y {
+				return cmpByte(x, y)
+			}
 			continue
 		}
-		b.WriteRune(unicode.ToUpper(r))
-		i += n
+		if ra != rb {
+			return cmpRune(ra, rb)
+		}
+		ca.s, cb.s = ca.s[na:], cb.s[nb:]
 	}
-	return b.String()
+	switch {
+	case !ca.done():
+		return 1
+	case !cb.done():
+		return -1
+	}
+	return 0
+}
+
+// foldCursor 是 [cmpFold] 在一边串上的读取位置。
+//
+// tail[lo:hi] 是上一个字符转大写后还没比完的尾字节，全是续字节，
+// 单独解码必然非法，所以只会按原始字节比。
+type foldCursor struct {
+	s      string
+	tail   [utf8.UTFMax]byte
+	lo, hi int
+}
+
+func (c *foldCursor) done() bool { return c.lo == c.hi && len(c.s) == 0 }
+
+// peek 看当前位置的单元，不前进。
+//
+// raw 为真时 r 是一个原始字节（挂起的尾字节或非法字节）；否则 r 是已转成
+// 大写的码点，n 是它在原串里占的字节数。
+func (c *foldCursor) peek() (r rune, n int, raw bool) {
+	if c.lo < c.hi {
+		return rune(c.tail[c.lo]), 1, true
+	}
+	if x := c.s[0]; x < utf8.RuneSelf {
+		if 'a' <= x && x <= 'z' {
+			x -= 'a' - 'A'
+		}
+		return rune(x), 1, false
+	}
+	r, n = utf8.DecodeRuneInString(c.s)
+	if n == 1 && r == utf8.RuneError {
+		return rune(c.s[0]), 1, true
+	}
+	return unicode.ToUpper(r), n, false
+}
+
+// takeByte 取出 peek 所得单元在转大写后串里的首字节，并越过这一个字节。
+func (c *foldCursor) takeByte(r rune, n int, raw bool) byte {
+	switch {
+	case !raw:
+		m := utf8.EncodeRune(c.tail[:], r)
+		c.s = c.s[n:]
+		c.lo, c.hi = 1, m
+		return c.tail[0]
+	case c.lo < c.hi:
+		c.lo++
+	default:
+		c.s = c.s[1:]
+	}
+	return byte(r)
 }
 
 // collator 是语言相关比较器的池。

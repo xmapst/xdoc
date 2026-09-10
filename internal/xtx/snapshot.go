@@ -55,10 +55,12 @@ func (t *Transaction) Snapshot(ctx context.Context, name string, mode Mode, crea
 	if s, ok := t.snapshots[key]; ok {
 		switch {
 		case mode == ModeWrite && s.mode == ModeRead:
+			t.mu.Lock()
 			t.pages.size -= len(s.local)
 
 			s.close(false)
 			delete(t.snapshots, key)
+			t.mu.Unlock()
 		case create && s.collection == nil:
 			if err := s.loadCollection(true); err != nil {
 				return nil, err
@@ -96,7 +98,9 @@ func (t *Transaction) Snapshot(ctx context.Context, name string, mode Mode, crea
 	if err := s.loadCollection(create); err != nil {
 		return nil, err
 	}
+	t.mu.Lock()
 	t.snapshots[key] = s
+	t.mu.Unlock()
 	ok = true
 	return s, nil
 }
@@ -147,9 +151,11 @@ func (s *Snapshot) loadCollection(create bool) error {
 		if err != nil {
 			return err
 		}
+		s.tx.mu.Lock()
 		s.collection = cp
 
 		delete(s.local, pageID)
+		s.tx.mu.Unlock()
 		return nil
 	}
 	if !create {
@@ -175,8 +181,10 @@ func (s *Snapshot) loadCollection(create bool) error {
 	}
 
 	cp.SetColID(id)
+	s.tx.mu.Lock()
 	s.collection = cp
 	delete(s.local, id)
+	s.tx.mu.Unlock()
 	name := s.name
 	s.tx.OnCommit(func(h *xpage.HeaderPage) error { return h.AddCollection(name, id) })
 	return nil
@@ -204,7 +212,13 @@ func (s *Snapshot) GetPageInfo(id uint32) (*xpage.Page, PageInfo, error) {
 //
 // latest 为真时不用快照定住的版本，而是取当前最新的——分配新页要看真实的空页链，
 // 不能看一份旧视图。
+//
+// 实例关掉之后一律返回 [ErrClosed]：本地页表和缓存里的页读起来不碰文件，
+// 不先看这一眼，关闭之前开的遍历会照样走完。
 func (s *Snapshot) getPage(id uint32, latest bool) (*xpage.Page, PageInfo, error) {
+	if s.tx.core.closed.Load() {
+		return nil, PageInfo{}, ErrClosed
+	}
 	if id == 0 {
 		return s.tx.core.header.Page, PageInfo{}, nil
 	}
@@ -300,18 +314,20 @@ func (s *Snapshot) adopt(id uint32, buf []byte, fromLog bool) (*xpage.Page, erro
 	if fromLog && !shared {
 		p.ClearTransactionMark()
 	}
+	s.tx.mu.Lock()
 	if len(s.local) >= maxLocalPages {
 		s.evictClean()
 	}
 	s.local[id] = localPage{page: p, shared: shared}
 	s.tx.pages.size++
+	s.tx.mu.Unlock()
 	return p, nil
 }
 
 // maxLocalPages 是一份快照攒到多少页就该清一清干净页。
 const maxLocalPages = 1000
 
-// evictClean 丢掉本地页表里所有没改过的页。脏页必须留着，它们还没落盘。
+// evictClean 丢掉本地页表里所有没改过的页。脏页必须留着，它们还没落盘。调用方拿着 t.mu。
 func (s *Snapshot) evictClean() {
 	n := 0
 	for id, lp := range s.local {
@@ -335,6 +351,9 @@ func (s *Snapshot) NewPage(t xpage.PageType) (*xpage.Page, error) {
 	if s.mode != ModeWrite {
 		return nil, fmt.Errorf("xtx: cannot allocate a page from a read-only snapshot")
 	}
+	if s.tx.core.closed.Load() {
+		return nil, ErrClosed
+	}
 	s.tx.core.headerMu.Lock()
 	defer s.tx.core.headerMu.Unlock()
 	h := s.tx.core.header
@@ -353,7 +372,9 @@ func (s *Snapshot) NewPage(t xpage.PageType) (*xpage.Page, error) {
 		h.SetFreeEmptyPageList(p.NextPageID())
 		id = free
 		buf = p.Bytes()
+		s.tx.mu.Lock()
 		delete(s.local, free)
+		s.tx.mu.Unlock()
 	} else {
 		next := h.LastPageID() + 1
 		if int64(next+1)*xpage.PageSize > h.LimitSize() {
@@ -374,9 +395,11 @@ func (s *Snapshot) NewPage(t xpage.PageType) (*xpage.Page, error) {
 		p.SetColID(s.collection.ID())
 	}
 
+	s.tx.mu.Lock()
 	s.tx.pages.newPages = append(s.tx.pages.newPages, id)
 	s.local[id] = localPage{page: p}
 	s.tx.pages.size++
+	s.tx.mu.Unlock()
 	return p, nil
 }
 
@@ -403,7 +426,9 @@ func (s *Snapshot) DeletePage(p *xpage.Page) error {
 		p.SetNextPageID(s.tx.pages.firstDelete)
 		s.tx.pages.firstDelete = p.ID()
 	}
+	s.tx.mu.Lock()
 	s.tx.pages.deleted++
+	s.tx.mu.Unlock()
 	s.tx.headerChanged = true
 	return nil
 }
@@ -472,7 +497,7 @@ func (s *Snapshot) canSee(id, dataPages uint32) bool {
 // close 关掉快照。
 //
 // reuse 为真时把私有的干净页缓冲还回池里；脏页不能还——它们的内容
-// 可能还挂在别处（比如日志缓存）。
+// 可能还挂在别处（比如日志缓存）。调用方拿着 t.mu。
 func (s *Snapshot) close(reuse bool) {
 	if reuse {
 		for _, lp := range s.local {

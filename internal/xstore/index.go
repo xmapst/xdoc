@@ -220,6 +220,35 @@ func (l SkipList) AddNode(key *xbson.Value, dataBlock xpage.Address,
 	return l.store.getNode(addr)
 }
 
+// CheckAdd 不动任何页，预先确认 [SkipList.AddNode] 不会因为键本身失败：
+// 不是哨兵值、编码后不超长、唯一索引里没有相等的键。
+//
+// 撞上的节点若 ignore 认可（通常是同一次改写里马上要摘掉的旧节点），不算重复。
+// 键长不超上限时最高层的节点也放得下，所以不必按层数再核对节点大小。
+func (l SkipList) CheckAdd(key *xbson.Value, coll xcoll.Collation, ignore func(xpage.Address) bool) error {
+	if key.Type() == xbson.TypeMinValue || key.Type() == xbson.TypeMaxValue {
+		return fmt.Errorf("%w: those two are the skip list's own sentinels", ErrReservedKey)
+	}
+	if _, err := key.IndexKeySize(); err != nil {
+		return err
+	}
+	if !l.ix.Unique {
+		return nil
+	}
+	n, err := l.Find(key, false, Asc, coll)
+	if err != nil {
+		return err
+	}
+	if n != nil && (ignore == nil || !ignore(n.Addr)) {
+		return fmt.Errorf("%w: index %q", ErrDuplicateKey, l.ix.Name)
+	}
+	return nil
+}
+
+// 最高层节点配最长的键也不超过单节点上限，[SkipList.CheckAdd] 靠这一点省掉节点大小的核对。
+const _ = uint(xpage.MaxIndexNodeSize -
+	(xpage.IndexNodeHeaderSize + xpage.MaxSkipLevel*2*xpage.AddressSize + xbson.MaxIndexKeyLength))
+
 // linkNode 把新节点接进跳表。
 //
 // 先从最高层往下找每一层该插在谁后面，一路记进 lefts；这一趟顺带做唯一性检查，

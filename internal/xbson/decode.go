@@ -22,6 +22,16 @@ var ErrCorrupt = errors.New("xbson: corrupt document")
 // 再发现读不下去。
 const maxDocumentSize = 16 << 20
 
+// maxNestingDepth 是文档与数组最多嵌套几层，最外层的文档算第 1 层。
+//
+// 编解码都是递归的，而每层只占 7 个字节，16 MB 里塞得下两百多万层——
+// 没有这个上限，一段坏字节就能让解码器栈溢出，那是 recover 接不住的崩溃。
+// 编码卡同一个上限，保证写得进的一定读得出，自引用的文档也停在这里。
+//
+// 取 1024：不低于 JSON 解析允许的 1000 层，JSON 读得进来的文档都存得下；
+// 映射默认 20 层、表达式 128 层，实际的文档远到不了这个深度。
+const maxNestingDepth = 1024
+
 // Decode 解出一篇文档，日期按 UTC。
 func Decode(b []byte) (*Document, error) { return DecodeIn(b, time.UTC) }
 
@@ -44,9 +54,21 @@ func DecodeIn(b []byte, loc *time.Location) (*Document, error) {
 // 一页里连着放好几篇文档时走这条。
 func DecodePrefix(b []byte) (*Document, int, error) { return decoder{loc: time.UTC}.decodeDocument(b) }
 
-// decoder 带着解码时的选项，目前只有日期该落在哪个时区。
+// decoder 带着解码时的选项与状态：日期该落在哪个时区，当前嵌套了几层。
+//
+// 按值传递：往下走一层就复制一份改掉 depth，外层因此不受影响。
 type decoder struct {
-	loc *time.Location
+	loc   *time.Location
+	depth int
+}
+
+// deeper 下探一层，超过 [maxNestingDepth] 就判成损坏。
+func (dec decoder) deeper() (decoder, error) {
+	if dec.depth >= maxNestingDepth {
+		return dec, fmt.Errorf("%w: nested deeper than %d levels", ErrCorrupt, maxNestingDepth)
+	}
+	dec.depth++
+	return dec, nil
 }
 
 // decodeDocument 解出一篇文档，返回用掉几个字节。
@@ -54,6 +76,10 @@ type decoder struct {
 // **键重复判成损坏**：文档的键是唯一的，出现两个同名键说明这段字节
 // 不是这个编码器写出来的，后面的解读也就不可信了。
 func (dec decoder) decodeDocument(b []byte) (*Document, int, error) {
+	dec, err := dec.deeper()
+	if err != nil {
+		return nil, 0, err
+	}
 	total, err := docHeader(b)
 	if err != nil {
 		return nil, 0, err
@@ -66,10 +92,9 @@ func (dec decoder) decodeDocument(b []byte) (*Document, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		if d.Has(key) {
+		if !d.add(key, v) {
 			return nil, 0, fmt.Errorf("%w: duplicate key %q", ErrCorrupt, key)
 		}
-		d.Set(key, v)
 		p += n
 	}
 	if b[total-1] != 0 {
@@ -84,6 +109,10 @@ func (dec decoder) decodeDocument(b []byte) (*Document, int, error) {
 // 键名被忽略：数组在文件里存成键为下标串的文档，但读的时候只按出现
 // 次序取值——键名与位置对不上的情形照样能读出来。
 func (dec decoder) decodeArray(b []byte) (*Array, int, error) {
+	dec, err := dec.deeper()
+	if err != nil {
+		return nil, 0, err
+	}
 	total, err := docHeader(b)
 	if err != nil {
 		return nil, 0, err

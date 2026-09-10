@@ -656,7 +656,7 @@ func (df *DateTimeFormat) dtAssemble(toks dtoks) (DateParts, bool) {
 	sameSep := df.DateSeparator == df.TimeSeparator
 	for i := 0; i < len(toks); {
 		t := toks[i]
-		dtt := dttUnk
+		var dtt dtDTT
 		next := i + 1
 		switch t.kind {
 		case dtSpace, dtIgnorable:

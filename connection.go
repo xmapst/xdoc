@@ -61,6 +61,12 @@ type sharedState struct {
 	// open 表示底层核心此刻是开着的。
 	open bool
 
+	// refs 是本句柄上正在使用核心的操作数。
+	//
+	// 跨进程锁按句柄重入，同一句柄上的多个 goroutine 会同时拿着同一个核心；
+	// 只有最后一个做完、且没有事务时才能关它。
+	refs int
+
 	// txRunning 表示本句柄有一个事务正在进行。
 	txRunning bool
 
@@ -68,16 +74,127 @@ type sharedState struct {
 	txRelease func()
 }
 
+// coreGate 是直连模式下的句柄级锁：操作进出时计数，[DB.Rebuild] 等计数归零后独占着换核心。
+//
+// 普通操作走 enter，给排队中的重建让路，否则写入一个接一个重叠着进来，重建永远等不到空档。
+// 会嵌套在别的操作里被调到的地方（遍历、开事务、读一项元信息）走 join，只等正在进行的重建：
+// 外层已经持有着时再让路就是等自己。不用 [sync.RWMutex] 也是这个原因——它的读锁不可重入。
+// 漏网的嵌套最多让重建等到超时报错，不会永远卡住。
+type coreGate struct {
+	mu      sync.Mutex
+	refs    int
+	pending int
+	held    bool
+
+	// changed 在状态变化时关掉，叫醒所有等待者；没人等时为 nil，免得每次退出都分配。
+	changed chan struct{}
+
+	// exitFn 是预先绑好的 exit，免得每个操作都现分配一个闭包。
+	exitFn func()
+}
+
+// wait 反复试 ready，直到成功或者 ctx 结束。ready 在持有 mu 时调用，成功时自己改好状态。
+func (g *coreGate) wait(ctx context.Context, ready func() bool) error {
+	for {
+		g.mu.Lock()
+		if ready() {
+			g.mu.Unlock()
+			return nil
+		}
+		if g.changed == nil {
+			g.changed = make(chan struct{})
+		}
+		ch := g.changed
+		g.mu.Unlock()
+
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// notify 叫醒所有等待者。必须在持有 mu 时调用。
+func (g *coreGate) notify() {
+	if g.changed != nil {
+		close(g.changed)
+		g.changed = nil
+	}
+}
+
+// enter 进来一个普通操作，有重建排着队或正在进行时先让它。
+func (g *coreGate) enter(ctx context.Context) error {
+	return g.wait(ctx, func() bool {
+		if g.held || g.pending > 0 {
+			return false
+		}
+		g.refs++
+		return true
+	})
+}
+
+// join 进来一段可能嵌套在别的操作里的调用，只等正在进行的重建。
+func (g *coreGate) join(ctx context.Context) error {
+	return g.wait(ctx, func() bool {
+		if g.held {
+			return false
+		}
+		g.refs++
+		return true
+	})
+}
+
+// exit 退出一个操作，最后一个退出时叫醒等着独占的一方。
+func (g *coreGate) exit() {
+	g.mu.Lock()
+	g.refs--
+	if g.refs == 0 {
+		g.notify()
+	}
+	g.mu.Unlock()
+}
+
+// hold 等在途操作全部退出后独占，返回放开的函数；ctx 先结束就放弃，报 [xtx.ErrLockTimeout]。
+func (g *coreGate) hold(ctx context.Context) (func(), error) {
+	g.mu.Lock()
+	g.pending++
+	g.mu.Unlock()
+	err := g.wait(ctx, func() bool {
+		if g.held || g.refs > 0 {
+			return false
+		}
+		g.held = true
+		return true
+	})
+	g.mu.Lock()
+	g.pending--
+	g.notify()
+	g.mu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("%w: in-flight operations on this handle: %w", xtx.ErrLockTimeout, err)
+	}
+	return func() {
+		g.mu.Lock()
+		g.held = false
+		g.notify()
+		g.mu.Unlock()
+	}, nil
+}
+
 // enter 取得执行一个操作所需的持有权，返回对应的释放函数。
 //
-// 直连模式下是空操作。共享模式下取跨进程锁，必要时把库开出来。
+// 直连模式下只进出句柄级锁 [coreGate]。共享模式下取跨进程锁，必要时把库开出来。
 //
 // 事务进行中的分支见 [leakTransactionLockDepth]：那时返回的释放函数**什么都不做**，
 // 锁多攥了一次却不还。
 func (db *DB) enter(ctx context.Context) (func(), error) {
 	s := db.shared
 	if s == nil {
-		return func() {}, nil
+		if err := db.gate.enter(ctx); err != nil {
+			return nil, err
+		}
+		return db.gate.exitFn, nil
 	}
 	if err := s.lock.Acquire(ctx); err != nil {
 		return nil, err
@@ -85,35 +202,49 @@ func (db *DB) enter(ctx context.Context) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.txRunning {
+	release := s.lock.Release
+	switch {
+	case s.txRunning:
 		if leakTransactionLockDepth {
-			return func() {}, nil
+			release = func() {}
 		}
-		return func() { s.lock.Release() }, nil
+	case !s.open:
+		if err := db.openCore(); err != nil {
+			s.lock.Release()
+			return nil, err
+		}
+		s.open = true
 	}
-	if s.open {
-		return func() { s.lock.Release() }, nil
-	}
-	if err := db.openCore(); err != nil {
-		s.lock.Release()
-		return nil, err
-	}
-	s.open = true
-	return func() { db.exitLocked() }, nil
+	s.refs++
+	return func() { db.exitLocked(release) }, nil
 }
 
-// exitLocked 关掉核心并放锁，是共享模式下一个普通操作的收尾。
+// join 与 [DB.enter] 一样取得持有权，但直连模式下不给排队中的重建让路，见 [coreGate]。
+//
+// 给会嵌套在别的操作里被调到的地方用：遍历、开事务、读一项元信息。
+func (db *DB) join(ctx context.Context) (func(), error) {
+	if db.shared != nil {
+		return db.enter(ctx)
+	}
+	if err := db.gate.join(ctx); err != nil {
+		return nil, err
+	}
+	return db.gate.exitFn, nil
+}
+
+// exitLocked 结束一个操作：在途操作全部做完才关核心，最后调 release 放锁。
 //
 // 事务进行中不关核心：那个事务还要继续用它。
-func (db *DB) exitLocked() {
+func (db *DB) exitLocked(release func()) {
 	s := db.shared
 	s.mu.Lock()
-	if !s.txRunning && s.open {
+	s.refs--
+	if s.refs == 0 && !s.txRunning && s.open {
 		db.closeCore()
 		s.open = false
 	}
 	s.mu.Unlock()
-	s.lock.Release()
+	release()
 }
 
 // leakTransactionLockDepth 决定共享模式下事务内的操作要不要归还它取的那次锁。
@@ -136,9 +267,12 @@ func (db *DB) openCore() error {
 	if db.dataPath == "" {
 		core, err = db.opts.openOptions().OpenMemory()
 	} else {
+		if err := checkRebuildLeftovers(db.dataPath); err != nil {
+			return err
+		}
 		core, err = db.opts.openOptions().OpenFile(db.dataPath)
 		if err != nil && db.opts.autoRebuild && errors.Is(err, xtx.ErrNeedsRebuild) {
-			if _, rerr := db.opts.rebuildFile(db.dataPath, []Option{db.opts.withOptions()}); rerr != nil {
+			if _, rerr := db.opts.autoRebuildFile(db.dataPath, []Option{db.opts.withOptions()}); rerr != nil {
 				return errors.Join(err, rerr)
 			}
 			core, err = db.opts.openOptions().OpenFile(db.dataPath)
@@ -149,6 +283,7 @@ func (db *DB) openCore() error {
 	}
 	nd := db.opts.newDB(core)
 	db.core, db.engine = nd.core, nd.engine
+	db.engine.SetObserver(&db.hooks)
 	db.execOnce = sync.Once{}
 	db.exec = nil
 	return nil
@@ -190,10 +325,39 @@ func seqOf[V any](vs []V) iter.Seq2[V, error] {
 
 // enterSeq 把一次迭代整个圈进持有权里：迭代开始时取，迭代结束或中途放弃时还。
 //
-// 直连模式下直接透传，不多包一层。
+// 直连模式下只在算下一行时占着，把行交给调用方的那段时间放开：循环体里再调这个句柄上的方法，
+// 不该排到一个正等着这次遍历的重建后面。代价是遍历中途被重建插进来时，下一步会报核心已关。
 func (db *DB) enterSeq[V any](ctx context.Context, run func() iter.Seq2[V, error]) iter.Seq2[V, error] {
 	if db.shared == nil {
-		return run()
+		return func(yield func(V, error) bool) {
+			var zero V
+			if err := db.gate.join(ctx); err != nil {
+				yield(zero, err)
+				return
+			}
+			held := true
+			defer func() {
+				if held {
+					db.gate.exit()
+				}
+			}()
+			for v, e := range run() {
+				db.gate.exit()
+				held = false
+				ok := yield(v, e)
+				// 收尾（放弃遍历时的清理）也在持有权之下做。
+				if err := db.gate.join(ctx); err != nil {
+					if ok {
+						yield(zero, err)
+					}
+					return
+				}
+				held = true
+				if !ok {
+					return
+				}
+			}
+		}
 	}
 	return func(yield func(V, error) bool) {
 		rel, err := db.enter(ctx)
@@ -253,6 +417,10 @@ func (db *DB) exitTx() {
 func (db *DB) closeShared() error {
 	s := db.shared
 	s.mu.Lock()
+	if s.txRelease != nil {
+		// 事务占的那一份引用随它的释放函数一起丢掉，否则计数再也归不了零。
+		s.refs--
+	}
 	s.txRunning = false
 	s.txRelease = nil
 	var err error
@@ -279,10 +447,25 @@ func (db *DB) closeShared() error {
 // 取不到就静默不跑：调用它的是那些没有错误出口的读取路径（读一项 pragma 之类），
 // 那里宁可给一个零值也不该 panic。
 func (db *DB) withCore(fn func()) {
-	rel, err := db.enter(context.Background())
+	rel, err := db.join(context.Background())
 	if err != nil {
 		return
 	}
 	defer rel()
 	fn()
+}
+
+// beginCore 开一个底层事务。
+//
+// 直连模式下只在读核心的那一下进出句柄级锁，事务本身不占着它：一个忘了收尾的事务
+// 不该让 [DB.Rebuild] 永远等下去。走 join 是因为遍历里自开事务时外层已经持有着。
+// 共享模式下 [DB.enterTx] 已经取过持有权。
+func (db *DB) beginCore(ctx context.Context) (*xtx.Transaction, error) {
+	if db.shared == nil {
+		if err := db.gate.join(ctx); err != nil {
+			return nil, err
+		}
+		defer db.gate.exit()
+	}
+	return db.core.Begin(ctx)
 }

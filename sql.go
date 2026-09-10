@@ -118,12 +118,12 @@ func (db *DB) Execute(ctx context.Context, sql string, args ...any) iter.Seq2[*V
 		})
 	case xsql.KindCommit:
 		return oneValue(func() (*Value, error) {
-			ok, err := db.sqlEnd(true)
+			ok, err := db.sqlEnd(ctx, true)
 			return xbson.Boolean(ok), err
 		})
 	case xsql.KindRollback:
 		return oneValue(func() (*Value, error) {
-			ok, err := db.sqlEnd(false)
+			ok, err := db.sqlEnd(ctx, false)
 			return xbson.Boolean(ok), err
 		})
 	case xsql.KindRebuild:
@@ -455,20 +455,20 @@ func (db *DB) sqlBegin(ctx context.Context) (bool, error) {
 	if err := db.enterTx(ctx); err != nil {
 		return false, err
 	}
-	inner, err := db.core.Begin(ctx)
+	inner, err := db.beginCore(ctx)
 	if err != nil {
 		db.exitTx()
 		return false, err
 	}
-	db.sqlTx = &Tx{db: db, tx: inner}
+	db.sqlTx = &Tx{db: db, tx: inner, ctx: ctx}
 	return true, nil
 }
 
 // sqlEnd 执行 COMMIT 或 ROLLBACK，本来就不在事务里则返回 false。
 //
 // 先把事务从库句柄上摘下来再提交：提交失败时它也已经不是当前事务了，
-// 不然一次失败的提交会把这个句柄永久卡在事务状态里。
-func (db *DB) sqlEnd(commit bool) (bool, error) {
+// 不然一次失败的提交会把这个句柄永久卡在事务状态里。提交通知拿的是 COMMIT 这一句的 ctx。
+func (db *DB) sqlEnd(ctx context.Context, commit bool) (bool, error) {
 	db.sqlMu.Lock()
 	t := db.sqlTx
 	db.sqlTx = nil
@@ -476,6 +476,7 @@ func (db *DB) sqlEnd(commit bool) (bool, error) {
 	if t == nil {
 		return false, nil
 	}
+	t.ctx = ctx
 	if commit {
 		return true, t.Commit()
 	}

@@ -154,7 +154,7 @@ func (db *DB) Pragma(name string) (*Value, error) {
 			name, strings.Join(PragmaNames(), ", "))
 	}
 
-	rel, err := db.enter(context.Background())
+	rel, err := db.join(context.Background())
 	if err != nil {
 		return nil, err
 	}

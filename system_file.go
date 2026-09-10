@@ -41,9 +41,11 @@ func (so sysOpts) fileFormat() (format, filename string, err error) {
 
 // fileOptions 把 $file 的其余参数整理成读写选项，各有默认值。
 //
+// 打开文件一律经过 fa：默认只能碰根目录之下的文件，见 [WithFileRoot]。
+//
 // delimiter 只取第一个字节，空串报错——CSV 没有"没有分隔符"这种写法。
-func (so sysOpts) fileOptions(filename string) (xsysfile.Options, error) {
-	o := xsysfile.Options{Filename: filename}
+func (so sysOpts) fileOptions(filename string, fa fileAccess) (xsysfile.Options, error) {
+	o := xsysfile.Options{Filename: filename, OpenFile: fa.openFile}
 
 	enc, err := so.option("encoding", xbson.String("utf-8"))
 	if err != nil {
@@ -88,12 +90,15 @@ func (so sysOpts) fileOptions(filename string) (xsysfile.Options, error) {
 // ——同名不同义，这处不对称是格式定死的，所以两边分开取。
 //
 // CSV 读回来的值全是字符串，没有类型推断：1 读回来是 "1"。
-func (*DB) sysFileInput(_ context.Context, _ *Tx, opts sysOpts) iter.Seq2[*Document, error] {
+func (db *DB) sysFileInput(_ context.Context, _ *Tx, opts sysOpts) iter.Seq2[*Document, error] {
+	if err := db.opts.file.check(); err != nil {
+		return seqErr[*Document](err)
+	}
 	format, filename, err := opts.fileFormat()
 	if err != nil {
 		return seqErr[*Document](err)
 	}
-	o, err := opts.fileOptions(filename)
+	o, err := opts.fileOptions(filename, db.opts.file)
 	if err != nil {
 		return seqErr[*Document](err)
 	}
@@ -120,12 +125,15 @@ func (*DB) sysFileInput(_ context.Context, _ *Tx, opts sysOpts) iter.Seq2[*Docum
 //
 // 写文件不在事务里：文件系统没有参与两阶段提交的办法，所以 BEGIN 之后导出、
 // 再 ROLLBACK，文件仍然在那儿。
-func (*DB) sysFileOutput(_ context.Context, _ *Tx, opts sysOpts, docs iter.Seq2[*Document, error]) (int, error) {
+func (db *DB) sysFileOutput(_ context.Context, _ *Tx, opts sysOpts, docs iter.Seq2[*Document, error]) (int, error) {
+	if err := db.opts.file.check(); err != nil {
+		return 0, err
+	}
 	format, filename, err := opts.fileFormat()
 	if err != nil {
 		return 0, err
 	}
-	o, err := opts.fileOptions(filename)
+	o, err := opts.fileOptions(filename, db.opts.file)
 	if err != nil {
 		return 0, err
 	}

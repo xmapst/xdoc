@@ -22,8 +22,25 @@ func (w work) hasVectorIndexes() bool {
 //
 // 算不出向量（表达式取不到值、维数不对）时传 nil 进去，等于把它从图里摘掉——
 // 文档改得不再带向量了，图里也不该留着旧的。
-func (e *Engine) syncVectors(s *xtx.Snapshot, docVal *xbson.Value, addr xpage.Address) error {
+func (e *Engine) syncVectors(s *xtx.Snapshot, docVal *xbson.Value, addr xpage.Address,
+	loc *xstore.VectorLocator) error {
+	vecs, err := e.vectorsOf(s, docVal)
+	if err != nil {
+		return err
+	}
+	return putVectors(s, vecs, addr, loc)
+}
+
+// pendingVector 是一篇文档在某个向量索引上该写的向量，vec 为 nil 表示不参与。
+type pendingVector struct {
+	name string
+	vec  []float32
+}
+
+// vectorsOf 先把各向量索引上的向量都求出来，不动任何页——求值出错时还什么都没写。
+func (e *Engine) vectorsOf(s *xtx.Snapshot, docVal *xbson.Value) ([]pendingVector, error) {
 	cp := s.CollectionPage()
+	var out []pendingVector
 	for _, meta := range cp.VectorIndexes() {
 		vx, ok := cp.VectorIndexByName(meta.Name)
 		if !ok {
@@ -31,15 +48,29 @@ func (e *Engine) syncVectors(s *xtx.Snapshot, docVal *xbson.Value, addr xpage.Ad
 		}
 		ix, ok := cp.Index(meta.Name)
 		if !ok {
-			return fmt.Errorf("xengine: vector index %q has no matching index entry", meta.Name)
+			return nil, fmt.Errorf("xengine: vector index %q has no matching index entry", meta.Name)
 		}
 		vec, err := e.vectorOf(ix, vx, docVal)
 		if err != nil {
-			return indexErr(meta.Name, err)
+			return nil, indexErr(meta.Name, err)
 		}
+		out = append(out, pendingVector{name: meta.Name, vec: vec})
+	}
+	return out, nil
+}
 
-		if err := xstore.New(s).Vector(vx).Upsert(addr, vec); err != nil {
-			return indexErr(meta.Name, err)
+// putVectors 把求好的向量逐个写进各自的索引。索引描述每次现取，前一个写入改过的也能看到。
+//
+// loc 是本批共用的节点定位表，免得每篇文档都扫一遍文件找旧节点。
+func putVectors(s *xtx.Snapshot, vecs []pendingVector, addr xpage.Address, loc *xstore.VectorLocator) error {
+	cp := s.CollectionPage()
+	for _, pv := range vecs {
+		vx, ok := cp.VectorIndexByName(pv.name)
+		if !ok {
+			continue
+		}
+		if err := xstore.New(s).Vector(vx).WithLocator(loc).Upsert(addr, pv.vec); err != nil {
+			return indexErr(pv.name, err)
 		}
 	}
 	return nil
@@ -67,15 +98,15 @@ func (e *Engine) vectorOf(ix *xpage.CollectionIndex, vx *xpage.VectorIndex, docV
 	return vec, nil
 }
 
-// dropVectors 把一篇文档从所有向量索引里摘掉。
-func (e *Engine) dropVectors(s *xtx.Snapshot, addr xpage.Address) error {
+// dropVectors 把一篇文档从所有向量索引里摘掉。loc 同 [putVectors]。
+func (e *Engine) dropVectors(s *xtx.Snapshot, addr xpage.Address, loc *xstore.VectorLocator) error {
 	cp := s.CollectionPage()
 	for _, meta := range cp.VectorIndexes() {
 		vx, ok := cp.VectorIndexByName(meta.Name)
 		if !ok {
 			continue
 		}
-		if err := xstore.New(s).Vector(vx).Delete(addr); err != nil {
+		if err := xstore.New(s).Vector(vx).WithLocator(loc).Delete(addr); err != nil {
 			return indexErr(meta.Name, err)
 		}
 	}
@@ -163,6 +194,7 @@ func (e *Engine) backfillVector(s *xtx.Snapshot, tx *xtx.Transaction,
 	}
 
 	var buf []byte
+	loc := new(xstore.VectorLocator)
 	for _, pkAddr := range pkAddrs {
 		if err := tx.Safepoint(); err != nil {
 			return err
@@ -186,7 +218,7 @@ func (e *Engine) backfillVector(s *xtx.Snapshot, tx *xtx.Transaction,
 		if vec == nil {
 			continue
 		}
-		if err := st.Vector(vx).Upsert(block, vec); err != nil {
+		if err := st.Vector(vx).WithLocator(loc).Upsert(block, vec); err != nil {
 			return indexErr(ix.Name, err)
 		}
 	}

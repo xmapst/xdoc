@@ -34,6 +34,19 @@ type Options struct {
 	Overwritten bool
 	Delimiter   byte
 	WriteHeader bool
+
+	// OpenFile 打开 Filename，签名同 [os.OpenFile]；为 nil 时直接用 os.OpenFile。
+	//
+	// 调用方靠它把读写限定在某个目录之下。
+	OpenFile func(name string, flag int, perm os.FileMode) (*os.File, error)
+}
+
+// open 用 [Options.OpenFile] 打开目标文件。
+func (o Options) open(flag int, perm os.FileMode) (*os.File, error) {
+	if o.OpenFile != nil {
+		return o.OpenFile(o.Filename, flag, perm)
+	}
+	return os.OpenFile(o.Filename, flag, perm)
 }
 
 // ReadJSON 把一份 JSON 数组文件读成一串文档。
@@ -46,7 +59,7 @@ func (o Options) ReadJSON() iter.Seq2[*xbson.Document, error] {
 			yield(nil, err)
 			return
 		}
-		f, err := os.Open(o.Filename)
+		f, err := o.open(os.O_RDONLY, 0)
 		if err != nil {
 			yield(nil, err)
 			return
@@ -87,7 +100,7 @@ func (o Options) ReadCSV() iter.Seq2[*xbson.Document, error] {
 			yield(nil, err)
 			return
 		}
-		f, err := os.Open(o.Filename)
+		f, err := o.open(os.O_RDONLY, 0)
 		if err != nil {
 			yield(nil, err)
 			return
@@ -147,17 +160,17 @@ type csvReader struct {
 	delim rune
 }
 
-// eof 是内部用的读完标记。
+// errEOF 是内部用的读完标记。
 //
 // 与 [io.EOF] 分开，是为了在下面的多处判断里区分「读完了」与
 // 「底层报了个恰好是 io.EOF 的错」。
-var eof = errors.New("eof")
+var errEOF = errors.New("eof")
 
-// read 读一个字符，读完返回 eof。
+// read 读一个字符，读完返回 errEOF。
 func (c *csvReader) read() (rune, error) {
 	ch, _, err := c.r.ReadRune()
 	if err == io.EOF {
-		return 0, eof
+		return 0, errEOF
 	}
 	return ch, err
 }
@@ -174,7 +187,7 @@ func (c *csvReader) field() (*string, bool, error) {
 	for err == nil && (ch == '\n' || ch == '\r') {
 		ch, err = c.read()
 	}
-	if err == eof {
+	if err == errEOF {
 		return nil, true, nil
 	}
 	if err != nil {
@@ -193,18 +206,18 @@ func (c *csvReader) field() (*string, bool, error) {
 					sb = append(sb, '"')
 					continue
 				}
-				if nerr != nil && nerr != eof {
+				if nerr != nil && nerr != errEOF {
 					return nil, false, nerr
 				}
 				ch = next
-				if nerr == eof {
+				if nerr == errEOF {
 					ch = 0
 				}
 				break
 			}
 			sb = append(sb, ch)
 		}
-		if err != nil && err != eof {
+		if err != nil && err != errEOF {
 			return nil, false, err
 		}
 	} else {
@@ -212,10 +225,10 @@ func (c *csvReader) field() (*string, bool, error) {
 			sb = append(sb, ch)
 			ch, err = c.read()
 		}
-		if err != nil && err != eof {
+		if err != nil && err != errEOF {
 			return nil, false, err
 		}
-		if err == eof {
+		if err == errEOF {
 			ch = 0
 		}
 	}

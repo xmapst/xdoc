@@ -244,6 +244,9 @@ func isWordRest(r rune) bool {
 }
 
 // isWord 判断整个串是不是一个合法标识符。空串和纯空白都不是。
+//
+// 以美元号开头时，紧跟的那个字符也得能作首字符：词法分析只在这时把它读成一个词，
+// 单独的 $ 或 $1 读出来是根符号，裸写出去就解析不回来。
 func isWord(s string) bool {
 	if s == "" || strings.TrimFunc(s, unicode.IsSpace) == "" {
 		return false
@@ -252,6 +255,11 @@ func isWord(s string) bool {
 		if i == 0 {
 			if !isWordFirst(r) {
 				return false
+			}
+			if r == '$' {
+				if next, _ := utf8.DecodeRuneInString(s[1:]); !isWordFirst(next) {
+					return false
+				}
 			}
 			continue
 		}

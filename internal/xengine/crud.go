@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"math"
 
 	"github.com/xmapst/xdoc/internal/xbson"
 	"github.com/xmapst/xdoc/internal/xcoll"
@@ -34,13 +35,15 @@ func (e *Engine) InsertIn(ctx context.Context, tx *xtx.Transaction, name string,
 		return 0, err
 	}
 	n := 0
+	loc := new(xstore.VectorLocator)
 	for _, doc := range docs {
 		if err := tx.Safepoint(); err != nil {
 			return n, err
 		}
-		if err := e.insertDocument(s, name, doc, auto); err != nil {
+		if err := e.insertDocument(s, name, doc, auto, loc); err != nil {
 			return n, err
 		}
+		e.changed(ctx, tx, Change{Collection: name, Op: ChangeInsert, ID: doc.Get(IDField)})
 		n++
 	}
 	return n, nil
@@ -48,8 +51,9 @@ func (e *Engine) InsertIn(ctx context.Context, tx *xtx.Transaction, name string,
 
 // insertDocument 插入一篇文档：先定主键，再写数据块，最后建索引节点。
 //
-// 建索引失败时把刚写下的数据块删掉，两个错误一并返回。
-func (e *Engine) insertDocument(s *xtx.Snapshot, name string, doc *xbson.Document, auto AutoID) error {
+// 建索引失败时把刚写下的数据块删掉，两个错误一并返回。loc 是本批共用的向量节点定位表。
+func (e *Engine) insertDocument(s *xtx.Snapshot, name string, doc *xbson.Document, auto AutoID,
+	loc *xstore.VectorLocator) error {
 	if doc == nil {
 		return fmt.Errorf("%w: document is nil", ErrInvalidDocument)
 	}
@@ -70,7 +74,7 @@ func (e *Engine) insertDocument(s *xtx.Snapshot, name string, doc *xbson.Documen
 	if err != nil {
 		return err
 	}
-	if err := e.syncIndexesOnInsert(s, doc, addr); err != nil {
+	if err := e.syncIndexesOnInsert(s, doc, addr, loc); err != nil {
 		return errors.Join(err, st.DeleteDocument(addr))
 	}
 	return nil
@@ -80,7 +84,8 @@ func (e *Engine) insertDocument(s *xtx.Snapshot, name string, doc *xbson.Documen
 //
 // 任何一步失败都把已经建好的节点**按相反次序**摘掉——否则跳表里会留下
 // 指向已删数据块的节点。向量索引单独走一遍。
-func (e *Engine) syncIndexesOnInsert(s *xtx.Snapshot, doc *xbson.Document, addr xpage.Address) error {
+func (e *Engine) syncIndexesOnInsert(s *xtx.Snapshot, doc *xbson.Document, addr xpage.Address,
+	loc *xstore.VectorLocator) error {
 	docVal := doc.Value()
 	st := xstore.New(s)
 	var last *xstore.Node
@@ -116,7 +121,7 @@ func (e *Engine) syncIndexesOnInsert(s *xtx.Snapshot, doc *xbson.Document, addr 
 		}
 	}
 	if (work{s}).hasVectorIndexes() {
-		if err := e.syncVectors(s, docVal, addr); err != nil {
+		if err := e.syncVectors(s, docVal, addr, loc); err != nil {
 			return errors.Join(err, undo())
 		}
 	}
@@ -141,6 +146,13 @@ func (e *Engine) indexKeys(ix *xpage.CollectionIndex, doc *xbson.Value) ([]*xbso
 	return e.keys(ix.Expression, doc, e.coll)
 }
 
+// IndexKeys 算出一篇文档在某个索引里该占的那些键，与插入、改写、回填建节点走的是同一段代码。
+//
+// 给校验核对多键索引的节点数用：求键与判重稍有出入，核对出来的条数就不作数。
+func (e *Engine) IndexKeys(ix *xpage.CollectionIndex, doc *xbson.Value) ([]*xbson.Value, error) {
+	return e.indexKeys(ix, doc)
+}
+
 // resolveID 定下一篇文档的主键，必要时按 auto 生成一个并写回文档。
 //
 // 文档自带数字主键时顺手把自增序列抬上去，免得之后生成的主键与它撞上。
@@ -150,7 +162,9 @@ func (e *Engine) resolveID(s *xtx.Snapshot, name string, doc *xbson.Document, au
 
 		if id.Type().IsNumber() {
 			if n, ok := asInt64(id); ok {
-				e.bumpSequence(name, n)
+				if err := e.bumpSequence(s, name, n); err != nil {
+					return nil, err
+				}
 			}
 		}
 		return id, nil
@@ -166,7 +180,11 @@ func (e *Engine) resolveID(s *xtx.Snapshot, name string, doc *xbson.Document, au
 		}
 		id = xbson.GUID(g)
 	case AutoIDInt32, AutoIDInt64:
-		n, err := e.nextSequence(s, name)
+		limit := int64(math.MaxInt64)
+		if auto == AutoIDInt32 {
+			limit = math.MaxInt32
+		}
+		n, err := e.nextSequence(s, name, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -205,15 +223,17 @@ func (e *Engine) UpdateIn(ctx context.Context, tx *xtx.Transaction, name string,
 		return 0, err
 	}
 	n := 0
+	loc := new(xstore.VectorLocator)
 	for _, doc := range docs {
 		if err := tx.Safepoint(); err != nil {
 			return n, err
 		}
-		ok, err := e.updateDocument(s, doc)
+		ok, err := e.updateDocument(s, doc, loc)
 		if err != nil {
 			return n, err
 		}
 		if ok {
+			e.changed(ctx, tx, Change{Collection: name, Op: ChangeUpdate, ID: doc.Get(IDField)})
 			n++
 		}
 	}
@@ -224,7 +244,10 @@ func (e *Engine) UpdateIn(ctx context.Context, tx *xtx.Transaction, name string,
 //
 // 数据块就地改写，首块地址不变，所以指向它的索引节点不用动地址，
 // 只需按新旧键的差异增删。
-func (e *Engine) updateDocument(s *xtx.Snapshot, doc *xbson.Document) (bool, error) {
+//
+// **会失败的检查都在动手之前做完**：求索引键与向量、新键的键长与唯一性。
+// 写到一半才报错的话，事务里忽略错误照样提交的调用方会留下新数据配旧索引。
+func (e *Engine) updateDocument(s *xtx.Snapshot, doc *xbson.Document, loc *xstore.VectorLocator) (bool, error) {
 	id := doc.Get(IDField)
 	if err := validateID(id); err != nil {
 		return false, err
@@ -244,11 +267,15 @@ func (e *Engine) updateDocument(s *xtx.Snapshot, doc *xbson.Document) (bool, err
 	if err != nil {
 		return false, err
 	}
+	plan, err := e.planIndexUpdate(s, node, doc)
+	if err != nil {
+		return false, err
+	}
 
 	if err := st.UpdateDocument(addr, raw); err != nil {
 		return false, err
 	}
-	return true, e.syncIndexesOnUpdate(s, node, doc, addr)
+	return true, e.applyIndexUpdate(s, node, addr, plan, loc)
 }
 
 // oldKey 是更新前某个索引节点的样子：属于哪个索引槽、键是什么、节点在哪。
@@ -258,15 +285,27 @@ type oldKey struct {
 	addr xpage.Address
 }
 
-// syncIndexesOnUpdate 按新旧索引键的差异增删节点。
+// newKey 是更新后某个索引该有的一个键。
+type newKey struct {
+	slot uint8
+	name string
+	key  *xbson.Value
+}
+
+// indexUpdate 是改写一篇文档时要对索引做的改动，预先算好、查过。
+type indexUpdate struct {
+	vectors  []pendingVector
+	toDelete []xpage.Address
+	toInsert []newKey
+}
+
+// planIndexUpdate 算出新旧索引键的差异，只读不写。
 //
 // 先沿同文档链收齐现有的非主键节点，再算出这篇文档现在该有哪些键，
 // 两边对一遍：只在旧表里的删掉，只在新表里的加上，两边都有的原样不动——
-// 键没变就没必要在跳表里挪一趟。
-//
-// 键的比较一律按二进制序，不看排序规则：索引里存的是字节。
-func (e *Engine) syncIndexesOnUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
-	doc *xbson.Document, addr xpage.Address) error {
+// 键没变就没必要在跳表里挪一趟。要插的键逐个核对插不插得进去。
+func (e *Engine) planIndexUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
+	doc *xbson.Document) (*indexUpdate, error) {
 	cp := s.CollectionPage()
 	st := xstore.New(s)
 
@@ -274,15 +313,15 @@ func (e *Engine) syncIndexesOnUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
 	cur := pkNode.NextNode()
 	for hops := 0; !cur.IsEmpty(); hops++ {
 		if hops > maxIndexNodesPerDocument {
-			return fmt.Errorf("%w: document index chain is too long or cyclic", xpage.ErrCorrupt)
+			return nil, fmt.Errorf("%w: document index chain is too long or cyclic", xpage.ErrCorrupt)
 		}
 		n, err := st.NodeAt(cur)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		k, err := n.Key()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		olds = append(olds, oldKey{slot: n.Slot(), key: k, addr: cur})
 		cur = n.NextNode()
@@ -290,15 +329,13 @@ func (e *Engine) syncIndexesOnUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
 
 	docVal := doc.Value()
 
+	plan := &indexUpdate{}
 	if (work{s}).hasVectorIndexes() {
-		if err := e.syncVectors(s, docVal, addr); err != nil {
-			return err
+		vecs, err := e.vectorsOf(s, docVal)
+		if err != nil {
+			return nil, err
 		}
-	}
-	type newKey struct {
-		slot uint8
-		name string
-		key  *xbson.Value
+		plan.vectors = vecs
 	}
 	var news []newKey
 	for _, meta := range cp.Indexes() {
@@ -308,20 +345,37 @@ func (e *Engine) syncIndexesOnUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
 		ix := meta
 		keys, err := e.indexKeys(&ix, docVal)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, k := range keys {
 			news = append(news, newKey{slot: ix.Slot, name: ix.Name, key: k})
 		}
 	}
 	if len(olds) == 0 && len(news) == 0 {
-		return nil
+		return plan, nil
 	}
 
+	plan.toDelete, plan.toInsert = diffIndexKeys(olds, news)
+	if err := e.checkInsertable(s, plan.toInsert, plan.toDelete); err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+// diffIndexKeys 对比新旧索引键，返回要删的旧节点和要插的新键，次序与各自原表一致。
+//
+// 键的比较一律按二进制序，不看排序规则：索引里存的是字节。键多时按
+// [xbson.BinaryKey] 放进 map 判存在，免得两两比较；有键给不出这种身份
+// （小数、文档一类）或者键本来就少，仍旧两两比。
+func diffIndexKeys(olds []oldKey, news []newKey) (toDelete []xpage.Address, toInsert []newKey) {
+	if len(olds)*len(news) > 64 {
+		if del, ins, ok := diffIndexKeysByID(olds, news); ok {
+			return del, ins
+		}
+	}
 	same := func(slot uint8, k *xbson.Value, o oldKey) bool {
 		return o.slot == slot && o.key.Compare(k, xcoll.Binary) == 0
 	}
-	var toDelete []xpage.Address
 	for _, o := range olds {
 		keep := false
 		for _, n := range news {
@@ -334,7 +388,6 @@ func (e *Engine) syncIndexesOnUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
 			toDelete = append(toDelete, o.addr)
 		}
 	}
-	var toInsert []newKey
 	for _, n := range news {
 		exists := false
 		for _, o := range olds {
@@ -347,10 +400,101 @@ func (e *Engine) syncIndexesOnUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
 			toInsert = append(toInsert, n)
 		}
 	}
+	return toDelete, toInsert
+}
+
+// diffIndexKeysByID 是 [diffIndexKeys] 的 map 版，有键没有 [xbson.BinaryKey] 时报 false。
+func diffIndexKeysByID(olds []oldKey, news []newKey) ([]xpage.Address, []newKey, bool) {
+	type slotKey struct {
+		slot uint8
+		key  xbson.BinaryKey
+	}
+	oldIDs := make([]slotKey, len(olds))
+	inOld := make(map[slotKey]struct{}, len(olds))
+	for i, o := range olds {
+		k, ok := o.key.BinaryKey()
+		if !ok {
+			return nil, nil, false
+		}
+		oldIDs[i] = slotKey{slot: o.slot, key: k}
+		inOld[oldIDs[i]] = struct{}{}
+	}
+	newIDs := make([]slotKey, len(news))
+	inNew := make(map[slotKey]struct{}, len(news))
+	for i, n := range news {
+		k, ok := n.key.BinaryKey()
+		if !ok {
+			return nil, nil, false
+		}
+		newIDs[i] = slotKey{slot: n.slot, key: k}
+		inNew[newIDs[i]] = struct{}{}
+	}
+
+	var toDelete []xpage.Address
+	for i, o := range olds {
+		if _, ok := inNew[oldIDs[i]]; !ok {
+			toDelete = append(toDelete, o.addr)
+		}
+	}
+	var toInsert []newKey
+	for i, n := range news {
+		if _, ok := inOld[newIDs[i]]; !ok {
+			toInsert = append(toInsert, n)
+		}
+	}
+	return toDelete, toInsert, true
+}
+
+// checkInsertable 预先确认 toInsert 里的键都插得进去，不动任何页。
+//
+// 唯一索引里撞上本文档马上要摘掉的旧节点不算重复——真插的时候它已经删了；
+// 反过来，排在前面的新键插进去之后也会占位，得一并算上。
+func (e *Engine) checkInsertable(s *xtx.Snapshot, toInsert []newKey, toDelete []xpage.Address) error {
+	cp := s.CollectionPage()
+	st := xstore.New(s)
+	var dropping map[xpage.Address]bool
+	ignore := func(a xpage.Address) bool {
+		if dropping == nil {
+			dropping = make(map[xpage.Address]bool, len(toDelete))
+			for _, d := range toDelete {
+				dropping[d] = true
+			}
+		}
+		return dropping[a]
+	}
+	for i, n := range toInsert {
+		ix, ok := cp.Index(n.name)
+		if !ok {
+			return fmt.Errorf("xengine: index %q disappeared mid-update", n.name)
+		}
+		if err := st.List(ix).CheckAdd(n.key, e.coll, ignore); err != nil {
+			return indexErr(n.name, err)
+		}
+		if !ix.Unique {
+			continue
+		}
+		for _, p := range toInsert[:i] {
+			if p.slot == n.slot && p.key.Compare(n.key, e.coll) == 0 {
+				return fmt.Errorf("%w: index %q", xstore.ErrDuplicateKey, n.name)
+			}
+		}
+	}
+	return nil
+}
+
+// applyIndexUpdate 照着 planIndexUpdate 算好的改动写向量、删旧节点、插新节点。
+func (e *Engine) applyIndexUpdate(s *xtx.Snapshot, pkNode *xstore.Node,
+	addr xpage.Address, plan *indexUpdate, loc *xstore.VectorLocator) error {
+	if err := putVectors(s, plan.vectors, addr, loc); err != nil {
+		return err
+	}
+	toDelete, toInsert := plan.toDelete, plan.toInsert
 	if len(toDelete) == 0 && len(toInsert) == 0 {
 		return nil
 	}
 
+	cp := s.CollectionPage()
+	st := xstore.New(s)
 	last, err := st.Chain(cp, pkNode.Addr).Delete(toDelete, e.coll)
 	if err != nil {
 		return err
@@ -394,6 +538,7 @@ func (e *Engine) UpsertIn(ctx context.Context, tx *xtx.Transaction, name string,
 		if err := (work{s}).requireMaintainableIndexes(name); err != nil {
 			return err
 		}
+		loc := new(xstore.VectorLocator)
 		for _, doc := range docs {
 			if err := tx.Safepoint(); err != nil {
 				return err
@@ -403,17 +548,19 @@ func (e *Engine) UpsertIn(ctx context.Context, tx *xtx.Transaction, name string,
 			}
 
 			if doc.Has(IDField) && doc.Get(IDField).Type() != xbson.TypeNull {
-				ok, err := e.updateDocument(s, doc)
+				ok, err := e.updateDocument(s, doc, loc)
 				if err != nil {
 					return err
 				}
 				if ok {
+					e.changed(ctx, tx, Change{Collection: name, Op: ChangeUpdate, ID: doc.Get(IDField)})
 					continue
 				}
 			}
-			if err := e.insertDocument(s, name, doc, auto); err != nil {
+			if err := e.insertDocument(s, name, doc, auto, loc); err != nil {
 				return err
 			}
+			e.changed(ctx, tx, Change{Collection: name, Op: ChangeInsert, ID: doc.Get(IDField)})
 			n++
 		}
 		return nil
@@ -451,6 +598,7 @@ func (e *Engine) DeleteIn(ctx context.Context, tx *xtx.Transaction, name string,
 			return err
 		}
 		st := xstore.New(s)
+		loc := new(xstore.VectorLocator)
 		for _, id := range ids {
 			if err := tx.Safepoint(); err != nil {
 				return err
@@ -468,7 +616,7 @@ func (e *Engine) DeleteIn(ctx context.Context, tx *xtx.Transaction, name string,
 			}
 
 			if (work{s}).hasVectorIndexes() {
-				if err := e.dropVectors(s, node.DataBlock()); err != nil {
+				if err := e.dropVectors(s, node.DataBlock(), loc); err != nil {
 					return err
 				}
 			}
@@ -479,11 +627,70 @@ func (e *Engine) DeleteIn(ctx context.Context, tx *xtx.Transaction, name string,
 			if err := st.Chain(s.CollectionPage(), node.Addr).DeleteAll(); err != nil {
 				return err
 			}
+			e.changed(ctx, tx, Change{Collection: name, Op: ChangeDelete, ID: id})
 			n++
 		}
 		return nil
 	}()
 	return n, err
+}
+
+// rangeDeleteBatch 是 [Engine.DeleteRangeIn] 每找齐多少个主键删一次。
+const rangeDeleteBatch = 256
+
+// DeleteRangeIn 在给定事务里删掉主键落在闭区间 [lo, hi] 里的全部文档，返回删了几篇。
+//
+// 先在只读快照上顺着主键索引找，找到了才交给 [Engine.DeleteIn] 转成写快照去删：
+// 区间里一篇都没有时不拿集合锁、不让任何页变脏，所在事务写出的字节与没调它时一样。
+// 本事务已经拿着这个集合的写快照时就在那一份上找。集合不存在时返回零。
+//
+// 找一批删一批，删完从 lo 重找，不在遍历途中改动跳表。
+func (e *Engine) DeleteRangeIn(ctx context.Context, tx *xtx.Transaction, name string,
+	lo, hi *xbson.Value) (int, error) {
+	total := 0
+	ids := make([]*xbson.Value, 0, rangeDeleteBatch)
+	for {
+		ids = ids[:0]
+		s, err := e.readSnapshot(ctx, tx, name)
+		if err != nil || s == nil {
+			return total, err
+		}
+		pk, err := (work{s}).primaryIndex()
+		if err != nil {
+			return total, err
+		}
+		st := xstore.New(s)
+		node, err := st.List(pk).Find(lo, true, xstore.Asc, e.coll)
+		for err == nil && node != nil && len(ids) < rangeDeleteBatch {
+			var k *xbson.Value
+			if k, err = node.Key(); err != nil {
+				break
+			}
+			// 尾哨兵本来就比 hi 大，这里再点名一次，免得 hi 自己是 MaxValue 时把它删了。
+			if k.Type() == xbson.TypeMaxValue || k.Compare(hi, e.coll) > 0 {
+				break
+			}
+			ids = append(ids, k)
+			node, err = st.NodeAt(node.Next0())
+		}
+		if err != nil {
+			return total, err
+		}
+		if len(ids) == 0 {
+			return total, nil
+		}
+
+		n, err := e.DeleteIn(ctx, tx, name, ids)
+		total += n
+		if err != nil {
+			return total, err
+		}
+		// 找得到却删不掉只能是索引坏了，接着重找会原地打转。
+		if n == 0 {
+			return total, fmt.Errorf("%w: collection %q: keys in range were found but none deleted",
+				xpage.ErrCorrupt, name)
+		}
+	}
 }
 
 // Find 按主键取一篇文档，自开一个只读事务。查不到时返回 nil 且不报错。

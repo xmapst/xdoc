@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/xmapst/xdoc/internal/xbson"
@@ -351,12 +352,48 @@ func (*Ctx) mMATCH(args []*xbson.Value) (*xbson.Value, error) {
 	}
 }
 
+// regexCacheMax 是正则缓存最多留的条数。
+//
+// 模式串多半是查询里的常量，全表扫描时每行都拿同一个串来编译；
+// 设上限是防着参数化的模式源源不断地往里塞。
+const regexCacheMax = 256
+
+// regexCache 按原始模式串缓存编译结果。[regexp.Regexp] 本身可以并发用。
+//
+// 改写具名组是纯函数，按原串作键与按改写后的串作键等价，还省掉命中时的一次改写。
+// 编不出来的模式不缓存，每次照常报错。
+var regexCache struct {
+	sync.RWMutex
+	m map[string]*regexp.Regexp
+}
+
 // compileRegex 编译一个正则，先把具名捕获组换成本地的写法。
 func compileRegex(pattern string) (*regexp.Regexp, error) {
+	regexCache.RLock()
+	re, ok := regexCache.m[pattern]
+	regexCache.RUnlock()
+	if ok {
+		return re, nil
+	}
+
 	re, err := regexp.Compile(rewriteNamedGroups(pattern))
 	if err != nil {
 		return nil, errf("invalid regular expression %q: %v", pattern, err)
 	}
+
+	regexCache.Lock()
+	defer regexCache.Unlock()
+	if regexCache.m == nil {
+		regexCache.m = make(map[string]*regexp.Regexp, regexCacheMax)
+	}
+	if _, dup := regexCache.m[pattern]; !dup && len(regexCache.m) >= regexCacheMax {
+		// 满了随手扔掉一条，map 的遍历顺序本来就是乱的。
+		for k := range regexCache.m {
+			delete(regexCache.m, k)
+			break
+		}
+	}
+	regexCache.m[pattern] = re
 	return re, nil
 }
 

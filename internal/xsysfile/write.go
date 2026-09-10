@@ -51,7 +51,7 @@ func (o Options) create() (*output, error) {
 	if o.Overwritten {
 		flag = os.O_WRONLY | os.O_CREATE
 	}
-	f, err := os.OpenFile(o.Filename, flag, 0o644)
+	f, err := o.open(flag, 0o644)
 	if err != nil {
 		if os.IsExist(err) {
 			return nil, fmt.Errorf("the file '%s' already exists", o.Filename)

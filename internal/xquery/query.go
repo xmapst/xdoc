@@ -76,6 +76,12 @@ type Query struct {
 
 	// ForUpdate 表示查询要拿写锁。
 	ForUpdate bool
+
+	// PrimaryOnly 让优化器只在主键索引上挑访问方式，二级索引与向量索引都不看。
+	//
+	// 给按 _id 区间分批推进的内部查询用：谓词若落到二级索引上，_id 条件就只剩过滤，
+	// 每批都得把剩余的全部匹配排一遍序。
+	PrimaryOnly bool
 }
 
 // NewQuery 造一条默认查询：取整篇文档，不限条数。

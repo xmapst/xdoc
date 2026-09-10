@@ -431,26 +431,28 @@ func (e env) seqArg(n Node) (*xbson.Value, error) {
 }
 
 // methodArgs 按方法签名逐个求出实参：标量形参走 scalarArg，序列形参走 seqArg。
-func (n *CallNode) methodArgs(e env) ([]*xbson.Value, Info, error) {
-	info, ok := n.MethodInfo()
-	if !ok {
-		return nil, Info{}, errf("method %s does not exist or contains invalid parameters", upperASCII(n.Name))
+//
+// 连同查到的方法表项一起返回，调用方直接拿它去调。
+func (n *CallNode) methodArgs(e env) ([]*xbson.Value, *def, error) {
+	d := n.resolve()
+	if d == nil {
+		return nil, nil, errf("method %s does not exist or contains invalid parameters", upperASCII(n.Name))
 	}
 	args := make([]*xbson.Value, len(n.Args))
 	for i, a := range n.Args {
 		var v *xbson.Value
 		var err error
-		if info.Params[i] == ParamSeq {
+		if d.info.Params[i] == ParamSeq {
 			v, err = e.seqArg(a)
 		} else {
 			v, err = e.scalarArg(a)
 		}
 		if err != nil {
-			return nil, Info{}, err
+			return nil, nil, err
 		}
 		args[i] = v
 	}
-	return args, info, nil
+	return args, d, nil
 }
 
 // callScalar 调一个方法并取一个值。IIF 走短路分支，不在这里求两边。
@@ -461,15 +463,11 @@ func (n *CallNode) callScalar(e env) (*xbson.Value, error) {
 	if v, handled, err := n.condition(e); handled {
 		return v, err
 	}
-	args, _, err := n.methodArgs(e)
+	args, d, err := n.methodArgs(e)
 	if err != nil {
 		return nil, err
 	}
-	fn := Lookup(n.Name, len(n.Args))
-	if fn == nil {
-		return nil, errf("method %s does not exist or contains invalid parameters", upperASCII(n.Name))
-	}
-	return fn(e.ctx(), args)
+	return d.call(n.Name, e.ctx(), args)
 }
 
 // callSeq 调一个方法并把结果摊成一串值产出。
@@ -477,17 +475,12 @@ func (n *CallNode) callSeq(e env, yield func(*xbson.Value, error) bool) {
 	if n == nil {
 		return
 	}
-	args, _, err := n.methodArgs(e)
+	args, d, err := n.methodArgs(e)
 	if err != nil {
 		yield(nil, err)
 		return
 	}
-	fn := Lookup(n.Name, len(n.Args))
-	if fn == nil {
-		yield(nil, errf("method %s does not exist or contains invalid parameters", upperASCII(n.Name)))
-		return
-	}
-	out, err := fn(e.ctx(), args)
+	out, err := d.call(n.Name, e.ctx(), args)
 	if err != nil {
 		yield(nil, err)
 		return

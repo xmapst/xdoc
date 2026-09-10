@@ -3,9 +3,6 @@ package xfmt
 // persianMaxYear 是波斯历能表达到的最后一年，再往后就超出公历的可表示范围。
 const persianMaxYear = 9378
 
-// persianLeapCount 是这个范围里的闰年总数。
-const persianLeapCount = 2270
-
 // persianLeapBits 是逐年的闰年位图，第 y 年对应第 y-1 位。
 //
 // 波斯历的闰年规则不是简单周期，只能预先算好存表。位图比每年一个字节

@@ -68,6 +68,8 @@ func (c *Collection) WithAutoID(a AutoID) *Collection {
 //
 // 没带主键的文档由 [Collection.AutoID] 那一档现发一个，并写回 docs 里那篇文档。
 func (c *Collection) Insert(ctx context.Context, docs ...*Document) (int, error) {
+	ctx, box := c.db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := c.db.enter(ctx)
 	if err != nil {
 		return 0, err
@@ -78,6 +80,8 @@ func (c *Collection) Insert(ctx context.Context, docs ...*Document) (int, error)
 
 // InsertOne 写入一篇文档并返回它的主键，主键是现发的时候尤其有用。
 func (c *Collection) InsertOne(ctx context.Context, doc *Document) (*Value, error) {
+	ctx, box := c.db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := c.db.enter(ctx)
 	if err != nil {
 		return nil, err
@@ -93,6 +97,8 @@ func (c *Collection) InsertOne(ctx context.Context, doc *Document) (*Value, erro
 //
 // 找不到的既不算失败也不算更新。这个数和提交的条数不一致时，往往正是要查的地方。
 func (c *Collection) Update(ctx context.Context, docs ...*Document) (int, error) {
+	ctx, box := c.db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := c.db.enter(ctx)
 	if err != nil {
 		return 0, err
@@ -112,6 +118,8 @@ type UpsertResult struct {
 // 主键重复该用它而不是接 [ErrDuplicateKey]：这里无竞态，还顺带告诉你插了几条
 // 改了几条。
 func (c *Collection) Upsert(ctx context.Context, docs ...*Document) (UpsertResult, error) {
+	ctx, box := c.db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := c.db.enter(ctx)
 	if err != nil {
 		return UpsertResult{}, err
@@ -126,6 +134,8 @@ func (c *Collection) Upsert(ctx context.Context, docs ...*Document) (UpsertResul
 
 // Delete 按主键删除，静默跳过不存在的主键，返回真的删掉的条数。
 func (c *Collection) Delete(ctx context.Context, ids ...*Value) (int, error) {
+	ctx, box := c.db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := c.db.enter(ctx)
 	if err != nil {
 		return 0, err
@@ -249,6 +259,8 @@ func (c *Collection) DropIndex(ctx context.Context, name string) (bool, error) {
 
 // Drop 删掉整个集合连同它的所有索引，返回它原先在不在。
 func (c *Collection) Drop(ctx context.Context) (bool, error) {
+	ctx, box := c.db.notifyScope(ctx)
+	defer box.flush()
 	rel, err := c.db.enter(ctx)
 	if err != nil {
 		return false, err

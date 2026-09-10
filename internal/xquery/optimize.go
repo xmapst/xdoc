@@ -253,6 +253,12 @@ func (o *optimizer) chooseIndex() (*candidate, error) {
 		return nil, nil
 	}
 	indexes := o.cp.Indexes()
+	if o.q.PrimaryOnly {
+		indexes = nil
+		if ix, ok := o.cp.Index(primaryIndexName); ok {
+			indexes = []xpage.CollectionIndex{*ix}
+		}
+	}
 
 	preferred := ""
 	if len(o.plan.Fields) == 1 {
@@ -474,8 +480,14 @@ func findIndex(indexes []xpage.CollectionIndex, expr string) *xpage.CollectionIn
 // 向量索引已经按距离排好了，直接作罢。否则看第一级排序键是不是正好就是
 // 索引表达式：是的话把索引调成那个方向，**且只有一级排序时才算彻底兑现**，
 // 多级的还得自己排。
+//
+// 分组查询的排序对的是分组结果，文档流上的顺序兑现不了，原样留给分组那一段。
 func (o *optimizer) defineOrderBy() error {
 	if len(o.q.OrderBy) == 0 {
+		return nil
+	}
+	if o.q.GroupBy != nil {
+		o.plan.OrderBy = o.q.OrderBy
 		return nil
 	}
 	if o.vectorOrderConsumed {

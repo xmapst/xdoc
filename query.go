@@ -210,6 +210,11 @@ func (b *QueryBuilder) ForUpdate() *QueryBuilder {
 	return b.with(func(q *xquery.Query) error { q.ForUpdate = true; return nil })
 }
 
+// primaryOnly 让这条查询只走主键索引，见 [xquery.Query.PrimaryOnly]。
+func (b *QueryBuilder) primaryOnly() *QueryBuilder {
+	return b.with(func(q *xquery.Query) error { q.PrimaryOnly = true; return nil })
+}
+
 // All 遍历查询结果。
 //
 // 遍历期间占着一个快照，中途 break 之后要让 for 循环正常退出，资源才会还回去。

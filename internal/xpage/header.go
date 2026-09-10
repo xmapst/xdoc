@@ -251,7 +251,7 @@ func (h *HeaderPage) AddCollection(name string, pageID uint32) error {
 		return err
 	}
 	h.collectionsDirty = true
-	h.dirty = true
+	h.dirty.Store(true)
 	return nil
 }
 
@@ -263,7 +263,7 @@ func (h *HeaderPage) DeleteCollection(name string) bool {
 	}
 	delete(h.collections, actual)
 	h.collectionsDirty = true
-	h.dirty = true
+	h.dirty.Store(true)
 	return true
 }
 
@@ -289,7 +289,7 @@ func (h *HeaderPage) RenameCollection(old, name string) error {
 		return err
 	}
 	h.collectionsDirty = true
-	h.dirty = true
+	h.dirty.Store(true)
 	return nil
 }
 
@@ -375,14 +375,14 @@ func (h *HeaderPage) FreeEmptyPageList() uint32 { return h.u32(offFreeEmptyPageL
 // SetFreeEmptyPageList 设置空页链的链头。
 func (h *HeaderPage) SetFreeEmptyPageList(v uint32) {
 	h.putU32(offFreeEmptyPageList, v)
-	h.dirty = true
+	h.dirty.Store(true)
 }
 
 // LastPageID 是文件里已经分配到的最大页号。
 func (h *HeaderPage) LastPageID() uint32 { return h.u32(offLastPageID) }
 
 // SetLastPageID 设置已分配到的最大页号。
-func (h *HeaderPage) SetLastPageID(v uint32) { h.putU32(offLastPageID, v); h.dirty = true }
+func (h *HeaderPage) SetLastPageID(v uint32) { h.putU32(offLastPageID, v); h.dirty.Store(true) }
 
 // CreationTime 返回文件的创建时刻。
 func (h *HeaderPage) CreationTime() (time.Time, error) {
@@ -393,7 +393,7 @@ func (h *HeaderPage) CreationTime() (time.Time, error) {
 func (h *HeaderPage) UserVersion() int32 { return h.i32(offUserVersion) }
 
 // SetUserVersion 设置调用方的版本号。
-func (h *HeaderPage) SetUserVersion(v int32) { h.putI32(offUserVersion, v); h.dirty = true }
+func (h *HeaderPage) SetUserVersion(v int32) { h.putI32(offUserVersion, v); h.dirty.Store(true) }
 
 // Collation 返回这份文件的字符串排序规则。
 //
@@ -411,7 +411,7 @@ func (h *HeaderPage) Timeout() time.Duration {
 // SetTimeout 设置等锁时限，不足一秒的部分被截掉。
 func (h *HeaderPage) SetTimeout(d time.Duration) {
 	h.putI32(offTimeout, int32(d/time.Second))
-	h.dirty = true
+	h.dirty.Store(true)
 }
 
 // UTCDate 报告日期该按 UTC 还是按本地时区读出来。
@@ -423,14 +423,14 @@ func (h *HeaderPage) SetUTCDate(v bool) {
 	if v {
 		h.buf[offUTCDate] = 1
 	}
-	h.dirty = true
+	h.dirty.Store(true)
 }
 
 // Checkpoint 是日志攒到多少页就自动搬回数据文件，0 表示不自动搬。
 func (h *HeaderPage) Checkpoint() int32 { return h.i32(offCheckpoint) }
 
 // SetCheckpoint 设置自动搬运的阈值。
-func (h *HeaderPage) SetCheckpoint(v int32) { h.putI32(offCheckpoint, v); h.dirty = true }
+func (h *HeaderPage) SetCheckpoint(v int32) { h.putI32(offCheckpoint, v); h.dirty.Store(true) }
 
 // noLimit 是「不限大小」在内存里的表示，文件里存的是 0。
 const noLimit int64 = 1<<63 - 1
@@ -449,7 +449,7 @@ func (h *HeaderPage) SetLimitSize(v int64) {
 		v = noLimit
 	}
 	h.putI64(offLimitSize, v)
-	h.dirty = true
+	h.dirty.Store(true)
 }
 
 // InvalidState 表示这份文件上一次没有正常收尾。
@@ -464,7 +464,7 @@ func (h *HeaderPage) SetInvalidState(v bool) {
 	if v {
 		h.buf[offInvalidState] = 1
 	}
-	h.dirty = true
+	h.dirty.Store(true)
 }
 
 // Savepoint 拷一份整页，供事务回滚时还原。
@@ -484,7 +484,7 @@ func (h *HeaderPage) Restore(sp []byte) error {
 		return err
 	}
 	h.collectionsDirty = false
-	h.dirty = true
+	h.dirty.Store(true)
 	return nil
 }
 

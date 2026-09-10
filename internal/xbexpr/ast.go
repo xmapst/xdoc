@@ -15,6 +15,7 @@ package xbexpr
 
 import (
 	"iter"
+	"sync/atomic"
 
 	"github.com/xmapst/xdoc/internal/xbson"
 )
@@ -261,6 +262,10 @@ type CallNode struct {
 	//
 	// 比如 $.a.UPPER() 会解析成 UPPER($.a) 并把它置真，还原文本时才写得回原样。
 	PathItems bool
+
+	// method 记下 Name 与实参个数查到的方法表项，见 [CallNode.resolve]。
+	// 因此节点一经解析或求值，Name 与 Args 的个数就不能再改。
+	method atomic.Pointer[def]
 }
 
 // Kind 返回 [KindCall]。

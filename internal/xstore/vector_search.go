@@ -55,7 +55,7 @@ func (g VectorGraph) Search(target []float32, maxDistance float64, limit int) ([
 
 	hits := make([]VectorHit, 0, len(cands))
 	for _, x := range cands {
-		ok := false
+		var ok bool
 		if dot {
 			ok = !math.IsNaN(x.sim) && x.sim >= minSimilarity
 		} else {

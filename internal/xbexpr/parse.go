@@ -415,11 +415,13 @@ func (p *parser) parseDocument(scope Scope) (Node, error) {
 			}
 			next = p.lx.readToken(true)
 		} else {
-			value = &PathNode{
-				Root:  RootDocument,
-				Steps: []PathStep{{Kind: StepField, Name: key}},
-				Scope: ScopeRoot,
+			// 空键名不产出字段步，与 [parser.readField] 把 $.[''] 读成 $ 一致：
+			// 否则打印出的 $.[""] 再解析就成了整篇文档，树与文本对不上。
+			path := &PathNode{Root: RootDocument, Scope: ScopeRoot}
+			if key != "" {
+				path.Steps = []PathStep{{Kind: StepField, Name: key}}
 			}
+			value = path
 		}
 
 		if value.Cardinality() != Scalar {

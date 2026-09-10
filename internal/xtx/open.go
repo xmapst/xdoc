@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -52,6 +53,12 @@ type OpenOptions struct {
 
 	// IgnoreInvalidState 让打开跳过「上次没干净关闭」的检查，重建流程要用。
 	IgnoreInvalidState bool
+
+	// Stats 是累加运行期计数的那一份；为 nil 时实例自备一份。
+	Stats *Stats
+
+	// Logger 记检查点失败、实例作废、锁超时这类事件；为 nil 时不记。
+	Logger *slog.Logger
 }
 
 // DefaultOpenOptions 返回可读写、提交即落盘、默认排序规则的选项。
@@ -153,7 +160,7 @@ func (opt OpenOptions) Open(data, log xdisk.Storage) (*Core, error) {
 			xerr.Unspecified.Newf("datafile collation is %s, not the %s given at open; use rebuild to change it", coll, opt.Collation),
 			d.Close())
 	}
-	return NewCore(d, w, header, hbuf, opt.CacheSize, coll), nil
+	return newCore(d, w, header, hbuf, opt.CacheSize, coll, opt.Stats, opt.Logger), nil
 }
 
 // prealloc 按 InitialSize 预先撑大数据文件。加密库不支持，长度也必须是整页的倍数。

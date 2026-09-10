@@ -215,9 +215,9 @@ func (e *Engine) DropIndexIn(ctx context.Context, tx *xtx.Transaction, coll, nam
 
 // dropIndexIn 删索引的实际动作。集合或索引不存在时返回未删除且不报错。
 //
-// 向量索引只需从索引表里摘掉；**删的是最后一个向量索引时**还要把整个集合的
-// 向量索引页一并回收。跳表索引则要逐篇文档把该槽的节点从同文档链里摘掉，
-// 再删掉头尾哨兵。
+// 向量索引要从索引表里摘掉：**删的是最后一个向量索引时**把整个集合的向量索引页
+// 一并回收，否则先拆掉它自己的图，别的向量索引的节点与页原样留着。
+// 跳表索引则要逐篇文档把该槽的节点从同文档链里摘掉，再删掉头尾哨兵。
 func (e *Engine) dropIndexIn(ctx context.Context, tx *xtx.Transaction, coll, name string) (bool, error) {
 	dropped := false
 	err := func() error {
@@ -236,6 +236,11 @@ func (e *Engine) dropIndexIn(ctx context.Context, tx *xtx.Transaction, coll, nam
 
 		if ix.Kind != xpage.IndexSkipList {
 			only := len(cp.VectorIndexes()) == 1
+			if vx, ok := cp.VectorIndexByName(name); ok && !only {
+				if err := xstore.New(s).Vector(vx).Drop(tx.Safepoint); err != nil {
+					return err
+				}
+			}
 			if err := cp.DeleteIndex(name); err != nil {
 				return err
 			}
@@ -390,6 +395,7 @@ func (e *Engine) DropCollection(ctx context.Context, name string) (bool, error) 
 			return nil
 		})
 		e.dropSequence(name)
+		e.changed(ctx, tx, Change{Collection: name, Op: ChangeDropCollection})
 		dropped = true
 		return nil
 	})
@@ -428,6 +434,7 @@ func (e *Engine) RenameCollection(ctx context.Context, old, name string) (bool, 
 			return err
 		}
 		tx.OnCommit(func(h *xpage.HeaderPage) error { return h.RenameCollection(old, name) })
+		e.changed(ctx, tx, Change{Collection: old, Op: ChangeRenameCollection, NewName: name})
 		renamed = true
 		return nil
 	})

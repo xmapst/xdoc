@@ -1,7 +1,6 @@
 package xfmt
 
 import (
-	"slices"
 	"strings"
 	"unicode"
 )
@@ -53,44 +52,6 @@ func (df *DateTimeFormat) ParseDate(s string) (DateParts, bool) {
 		return DateParts{}, false
 	}
 	return df.assembleDate(toks)
-}
-
-// ambigSegMax 是尝试消歧时最多处理几段。
-const ambigSegMax = 8
-
-// ambigSegs 找出含有歧义记号的段号。
-//
-// 日期分隔符与时间分隔符相同的语言里，一个分隔符到底算哪种要试；
-// 按段分组是因为同一段（两个空白之间）里的分隔符应当作同一种解读。
-//
-// 目前没有调用点：主路径 [DateTimeFormat.dtAssemble] 已经在状态机里
-// 逐个回退处理了歧义。
-func ambigSegs(toks []dtok) []int {
-	var out []int
-	for _, t := range toks {
-		if t.ambig && (len(out) == 0 || out[len(out)-1] != t.seg) {
-			out = append(out, t.seg)
-		}
-	}
-	return out
-}
-
-// assembleAmbig 按位掩码指定的段把歧义记号当作日期分隔符，再试一次拼装。
-//
-// buf 由调用方提供，好在多次尝试之间复用。目前没有调用点，
-// 理由同 [ambigSegs]。
-func (df *DateTimeFormat) assembleAmbig(buf, toks []dtok, segs []int, mask int) (DateParts, bool) {
-	copy(buf, toks)
-	for i := range buf {
-		if !buf[i].ambig {
-			continue
-		}
-		bit := slices.Index(segs, buf[i].seg)
-		if mask == -1 || mask&(1<<bit) != 0 {
-			buf[i].kind = dtDateSep
-		}
-	}
-	return df.assembleDate(buf)
 }
 
 // dtokKind 是切出来的记号种类。
@@ -854,15 +815,15 @@ func (b *dateBuilder) finish() (DateParts, bool) {
 		return DateParts{}, false
 	}
 
-	switch {
-	case b.ampm == 0:
+	switch b.ampm {
+	case 0:
 		if out.Hour > 12 {
 			return DateParts{}, false
 		}
 		if out.Hour == 12 {
 			out.Hour = 0
 		}
-	case b.ampm == 1:
+	case 1:
 		if out.Hour > 23 {
 			return DateParts{}, false
 		}
@@ -1174,17 +1135,6 @@ func (b *dateBuilder) assign(f map[byte]dtok) (y, m, d int, ok bool) {
 
 // dateOrder 是年月日的排列次序，比如 "yMd"、"dMy"。
 type dateOrder string
-
-// without 去掉一个成分，得到剩下两个的次序。
-func (o dateOrder) without(c byte) dateOrder {
-	var out []byte
-	for i := 0; i < len(o); i++ {
-		if o[i] != c {
-			out = append(out, o[i])
-		}
-	}
-	return dateOrder(out)
-}
 
 // String 返回次序串本身。
 func (o dateOrder) String() string { return string(o) }

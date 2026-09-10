@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"slices"
+	"sync/atomic"
 )
 
 // Page 是一页的内容：8 KB 缓冲加上页头与页尾槽表的解读。
@@ -23,7 +24,9 @@ type Page struct {
 	startIndex uint8
 
 	// dirty 表示这一页改过，需要写回。
-	dirty bool
+	//
+	// 用原子值：属主改页时不拿事务锁，诊断视图却会从别的协程来读。
+	dirty atomic.Bool
 }
 
 // NewPage 在一段缓冲上建一页新的，页头按类型初始化。
@@ -65,10 +68,10 @@ func Attach(buf []byte) (*Page, error) {
 func (p *Page) Bytes() []byte { return p.buf }
 
 // Dirty 报告这一页改过没有。
-func (p *Page) Dirty() bool { return p.dirty }
+func (p *Page) Dirty() bool { return p.dirty.Load() }
 
 // MarkDirty 手工标记改过，绕开 [Page.Bytes] 直接改字节时要调它。
-func (p *Page) MarkDirty() { p.dirty = true }
+func (p *Page) MarkDirty() { p.dirty.Store(true) }
 
 // reset 把一页清成指定类型的空页。
 //
@@ -91,7 +94,7 @@ func (p *Page) reset(id uint32, t PageType) {
 	p.buf[offHighestIndex] = EmptyIndex
 	p.buf[31] = 0
 	p.startIndex = 0
-	p.dirty = true
+	p.dirty.Store(true)
 }
 
 // MarkEmpty 把这一页清成空页，页号保留。
@@ -104,19 +107,19 @@ func (p *Page) ID() uint32 { return p.u32(offPageID) }
 func (p *Page) Type() PageType { return PageType(p.buf[offPageType]) }
 
 // SetType 改页的用途。
-func (p *Page) SetType(t PageType) { p.buf[offPageType] = byte(t); p.dirty = true }
+func (p *Page) SetType(t PageType) { p.buf[offPageType] = byte(t); p.dirty.Store(true) }
 
 // PrevPageID、NextPageID 是这一页在所属链上的前后邻居。
 func (p *Page) PrevPageID() uint32 { return p.u32(offPrevPageID) }
 
 // SetPrevPageID 设置链上的前一页。
-func (p *Page) SetPrevPageID(v uint32) { p.putU32(offPrevPageID, v); p.dirty = true }
+func (p *Page) SetPrevPageID(v uint32) { p.putU32(offPrevPageID, v); p.dirty.Store(true) }
 
 // NextPageID 返回链上的下一页。
 func (p *Page) NextPageID() uint32 { return p.u32(offNextPageID) }
 
 // SetNextPageID 设置链上的下一页。
-func (p *Page) SetNextPageID(v uint32) { p.putU32(offNextPageID, v); p.dirty = true }
+func (p *Page) SetNextPageID(v uint32) { p.putU32(offNextPageID, v); p.dirty.Store(true) }
 
 // PageListSlot 是这一页当前挂在哪一条空闲链上。
 //
@@ -124,7 +127,7 @@ func (p *Page) SetNextPageID(v uint32) { p.putU32(offNextPageID, v); p.dirty = t
 func (p *Page) PageListSlot() uint8 { return p.buf[offPageListSlot] }
 
 // SetPageListSlot 设置这一页所在的空闲链。
-func (p *Page) SetPageListSlot(v uint8) { p.buf[offPageListSlot] = v; p.dirty = true }
+func (p *Page) SetPageListSlot(v uint8) { p.buf[offPageListSlot] = v; p.dirty.Store(true) }
 
 // TransactionID 是最后写这一页的事务号，[Page.IsConfirmed] 说明那个事务提交了没有。
 //
@@ -132,7 +135,7 @@ func (p *Page) SetPageListSlot(v uint8) { p.buf[offPageListSlot] = v; p.dirty = 
 func (p *Page) TransactionID() uint32 { return p.u32(offTransactionID) }
 
 // SetTransactionID 记下写这一页的事务号。
-func (p *Page) SetTransactionID(v uint32) { p.putU32(offTransactionID, v); p.dirty = true }
+func (p *Page) SetTransactionID(v uint32) { p.putU32(offTransactionID, v); p.dirty.Store(true) }
 
 // ClearTransactionMark 清掉事务号与确认位。
 //
@@ -152,7 +155,7 @@ func (p *Page) SetConfirmed(v bool) {
 	if v {
 		p.buf[offIsConfirmed] = 1
 	}
-	p.dirty = true
+	p.dirty.Store(true)
 }
 
 // ColID 是这一页属于哪个集合。
@@ -161,7 +164,7 @@ func (p *Page) SetConfirmed(v bool) {
 func (p *Page) ColID() uint32 { return p.u32(offColID) }
 
 // SetColID 设置这一页所属的集合。
-func (p *Page) SetColID(v uint32) { p.putU32(offColID, v); p.dirty = true }
+func (p *Page) SetColID(v uint32) { p.putU32(offColID, v); p.dirty.Store(true) }
 
 // ItemsCount 返回页里有几项。
 func (p *Page) ItemsCount() int { return int(p.buf[offItemsCount]) }
@@ -309,7 +312,7 @@ func (p *Page) insertAt(index uint8, length int) ([]byte, uint8, error) {
 	p.buf[offItemsCount]++
 	p.putU16(offUsedBytes, uint16(p.UsedBytes()+length))
 	p.putU16(offNextFreePosition, uint16(pos+length))
-	p.dirty = true
+	p.dirty.Store(true)
 
 	if pos+length > PageSize-p.FooterSize() {
 		return nil, 0, fmt.Errorf("%w: segment %d+%d overruns footer at %d",
@@ -376,7 +379,7 @@ func (p *Page) Delete(i uint8) error {
 		p.putU16(offNextFreePosition, HeaderSize)
 		p.putU16(offFragmentedBytes, 0)
 	}
-	p.dirty = true
+	p.dirty.Store(true)
 	return nil
 }
 
@@ -412,7 +415,7 @@ func (p *Page) Update(i uint8, length int) ([]byte, error) {
 	if err := p.checkSegment(i, pos, old); err != nil {
 		return nil, err
 	}
-	p.dirty = true
+	p.dirty.Store(true)
 
 	switch {
 	case length == old:

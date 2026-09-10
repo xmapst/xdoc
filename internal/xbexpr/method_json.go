@@ -452,24 +452,24 @@ func (p *jsonParser) readString(quote uint16) string {
 			return utf16Str(out)
 		}
 		p.pos++
-		switch {
-		case e == quote:
+		switch e {
+		case quote:
 			out = append(out, quote)
-		case e == '\\':
+		case '\\':
 			out = append(out, '\\')
-		case e == '/':
+		case '/':
 			out = append(out, '/')
-		case e == 'b':
+		case 'b':
 			out = append(out, 0x08)
-		case e == 'f':
+		case 'f':
 			out = append(out, 0x0C)
-		case e == 'n':
+		case 'n':
 			out = append(out, 0x0A)
-		case e == 'r':
+		case 'r':
 			out = append(out, 0x0D)
-		case e == 't':
+		case 't':
 			out = append(out, 0x09)
-		case e == 'u':
+		case 'u':
 			var v uint16
 			for range 4 {
 				h, ok := p.at(p.pos)

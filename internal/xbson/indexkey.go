@@ -83,10 +83,10 @@ func (v *Value) indexPayloadSize() (int, error) {
 		return 2 + 4*len(f), nil
 	case TypeDocument:
 		d, _ := v.AsDocument()
-		return d.encodedSize()
+		return d.encodedSize(0)
 	case TypeArray:
 		a, _ := v.AsArray()
-		return a.encodedSize()
+		return a.encodedSize(0)
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrIndexKeyUnsupported, v.t)
 	}

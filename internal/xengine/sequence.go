@@ -2,6 +2,7 @@ package xengine
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"maps"
 
@@ -11,32 +12,49 @@ import (
 	"github.com/xmapst/xdoc/internal/xtx"
 )
 
-// nextSequence 取下一个自增主键。
+// nextSequence 取下一个自增主键，不超过 limit。
 //
 // 内存里没有记录时先从主键索引里查出当前最大值，此后就在内存里加。
-// **序列不落盘**：进程重启后重新查一次。
-func (e *Engine) nextSequence(s *xtx.Snapshot, name string) (int64, error) {
+// **序列不落盘**：进程重启后重新查一次。到了上限就报错，序列原样不动。
+func (e *Engine) nextSequence(s *xtx.Snapshot, name string, limit int64) (int64, error) {
 	e.seqMu.Lock()
 	defer e.seqMu.Unlock()
-	if v, ok := e.seq[name]; ok {
-		e.seq[name] = v + 1
-		return v + 1, nil
+	v, ok := e.seq[name]
+	if !ok {
+		last, err := e.lastID(s)
+		if err != nil {
+			return 0, err
+		}
+		v = last
 	}
-	last, err := e.lastID(s)
-	if err != nil {
-		return 0, err
+	if v >= limit {
+		return 0, fmt.Errorf("xengine: auto id sequence of %q exhausted: %d reached the limit %d", name, v, limit)
 	}
-	e.seq[name] = last + 1
-	return last + 1, nil
+	e.seq[name] = v + 1
+	return v + 1, nil
 }
 
 // bumpSequence 把序列抬到至少 n。手写数字主键时调用，免得之后自增撞上它。
-func (e *Engine) bumpSequence(name string, n int64) {
+//
+// 内存里没有记录时先从主键索引里查出当前最大值再比，不然重开库后手写一个小主键
+// 会把序列压到它身上。主键里有非数字、推不出最大值时只能信手写的这个。
+func (e *Engine) bumpSequence(s *xtx.Snapshot, name string, n int64) error {
 	e.seqMu.Lock()
 	defer e.seqMu.Unlock()
-	if v, ok := e.seq[name]; !ok || n > v {
-		e.seq[name] = n
+	v, ok := e.seq[name]
+	if !ok {
+		last, err := e.lastID(s)
+		switch {
+		case err == nil:
+			v = last
+		case errors.Is(err, ErrSequenceNotNumeric):
+			v = n
+		default:
+			return err
+		}
 	}
+	e.seq[name] = max(v, n)
+	return nil
 }
 
 // dropSequence 忘掉某个集合的序列，集合被删或改名时调用。

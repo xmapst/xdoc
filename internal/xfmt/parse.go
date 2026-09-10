@@ -195,7 +195,7 @@ func (p *anyParser) match(want string) bool {
 		if i >= len(p.s) {
 			return false
 		}
-		n := 0
+		var n int
 		switch {
 		case strings.HasPrefix(p.s[i:], string(r)):
 			n = len(string(r))

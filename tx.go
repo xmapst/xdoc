@@ -21,6 +21,9 @@ type Tx struct {
 	db   *DB
 	tx   *xtx.Transaction
 	done bool
+
+	// ctx 交给提交后回调，见 [DB.OnCommit]。
+	ctx context.Context
 }
 
 // ErrDeadlock 表示两个事务以相反顺序访问同一批集合，构成了互等。
@@ -55,13 +58,19 @@ func (db *DB) Transaction(ctx context.Context, fn func(*Tx) error) error {
 		if !errors.Is(err, ErrDeadlock) {
 			return err
 		}
+		if attempt == maxDeadlockRetries {
+			break
+		}
+		delay := backoff(attempt)
+		db.logDeadlockRetry(ctx, attempt+1, delay, true, err)
 
 		select {
 		case <-ctx.Done():
 			return errors.Join(err, ctx.Err())
-		case <-time.After(backoff(attempt)):
+		case <-time.After(delay):
 		}
 	}
+	db.logDeadlockRetry(ctx, maxDeadlockRetries+1, 0, false, err)
 	return fmt.Errorf("gave up after %d retries: %w", maxDeadlockRetries, err)
 }
 
@@ -84,12 +93,12 @@ func (db *DB) transactionOnce(ctx context.Context, fn func(*Tx) error) error {
 	if err := db.enterTx(ctx); err != nil {
 		return err
 	}
-	inner, err := db.core.Begin(ctx)
+	inner, err := db.beginCore(ctx)
 	if err != nil {
 		db.exitTx()
 		return err
 	}
-	t := &Tx{db: db, tx: inner}
+	t := &Tx{db: db, tx: inner, ctx: ctx}
 	defer func() {
 		if r := recover(); r != nil {
 			_ = t.rollback()
@@ -111,12 +120,12 @@ func (db *DB) BeginTrans(ctx context.Context) (*Tx, error) {
 	if err := db.enterTx(ctx); err != nil {
 		return nil, err
 	}
-	inner, err := db.core.Begin(ctx)
+	inner, err := db.beginCore(ctx)
 	if err != nil {
 		db.exitTx()
 		return nil, err
 	}
-	return &Tx{db: db, tx: inner}, nil
+	return &Tx{db: db, tx: inner, ctx: ctx}, nil
 }
 
 // Commit 提交这个事务。已经收尾过的再调是空操作。
@@ -127,22 +136,27 @@ func (t *Tx) Rollback() error { return t.rollback() }
 
 // commit 提交并把库句柄从事务状态里退出来。
 //
-// 无论提交成败都要退：一次失败的提交也已经把事务结束了。
+// 无论提交成败都要退：一次失败的提交也已经把事务结束了。退出来之后才发提交通知。
 func (t *Tx) commit() error {
 	if t.done {
 		return nil
 	}
 	t.done = true
-	defer t.db.exitTx()
-	return t.tx.Commit()
+	err := func() error {
+		defer t.db.exitTx()
+		return t.tx.Commit()
+	}()
+	t.db.hooks.settle(t.ctx, t.tx, err == nil)
+	return err
 }
 
-// rollback 回滚并把库句柄从事务状态里退出来。
+// rollback 回滚并把库句柄从事务状态里退出来，攒下的变更一并丢掉。
 func (t *Tx) rollback() error {
 	if t.done {
 		return nil
 	}
 	t.done = true
+	defer t.db.hooks.settle(t.ctx, t.tx, false)
 	defer t.db.exitTx()
 	return t.tx.Rollback()
 }

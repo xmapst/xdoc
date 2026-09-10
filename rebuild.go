@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -24,7 +26,7 @@ type RebuildResult struct {
 	// Indexes 不含主键索引——那个是新库自己建的。
 	Collections, Documents, Indexes int
 
-	// Backup 是原文件被改名后的路径。
+	// Backup 是原文件留作备份的路径。
 	//
 	// 它不会自动删：重建之后先核对新文件，确认无误再动它。
 	Backup string
@@ -50,7 +52,8 @@ func (r RebuildResult) Reclaimed() int64 { return r.Before - r.After }
 //
 // 改口令或改排序规则也走这里——那两样是整份文件的属性，只能在重写时换。
 //
-// 原文件不会被删，只是改名成备份；换名失败时会把已经做的改名一步步退回去。
+// 原文件不会被删，而是留作备份；新文件一次原子换名顶替原路径，
+// 所以不管在哪一步崩溃，原路径上都有一份完整的库。
 func Rebuild(path string, opts ...Option) (RebuildResult, error) {
 	return newOptions(opts).rebuildFile(path, opts)
 }
@@ -66,8 +69,9 @@ func (o options) withOptions() Option { return func(dst *options) { *dst = o } }
 // 一篇集合都没搬到、而源文件却分配过页时判定为失败，原文件保持不动：
 // 那多半是集合表坏了，此时"成功"地产出一个空库等于把数据丢干净。
 //
-// 换名分三步（日志、数据、临时文件），每一步失败都把前面的退回去，
-// 所以中途出错不会留下一个只换了一半的现场。
+// 换文件时原路径上始终有一份完整的库：先给原文件做备份（硬链接，不行就复制），
+// 再把日志挪到备份名下，最后一次原子换名让临时文件顶替原文件，之后刷目录。
+// 早先先把原文件改名走的顺序，两步之间崩溃会让原路径空着，见 [checkRebuildLeftovers]。
 func (o options) rebuildFile(path string, dstOpts []Option) (RebuildResult, error) {
 	var res RebuildResult
 	if fi, err := os.Stat(path); err == nil {
@@ -87,7 +91,8 @@ func (o options) rebuildFile(path string, dstOpts []Option) (RebuildResult, erro
 
 	ctx := context.Background()
 
-	tmp := path + "-rebuild.tmp"
+	// 原文件在（上面 Stat 过），残留的临时文件就不会是唯一的一份，可以放心删。
+	tmp := rebuildTempPath(path)
 	_ = os.Remove(tmp)
 	_ = os.Remove(xdisk.LogPath(tmp))
 
@@ -182,33 +187,121 @@ func (o options) rebuildFile(path string, dstOpts []Option) (RebuildResult, erro
 		_ = os.Remove(tmp)
 		return res, fmt.Errorf("xdoc: rebuild: close source: %w", err)
 	}
+	if err := syncFile(tmp); err != nil {
+		_ = os.Remove(tmp)
+		return res, fmt.Errorf("xdoc: rebuild: sync %q: %w", tmp, err)
+	}
 	if fi, err := os.Stat(tmp); err == nil {
 		res.After = fi.Size()
 	}
 
+	// 旧备份只是上一代的副本：此刻原文件完好，删掉它不会丢掉唯一的一份。
 	bak, bakLog := xdisk.BackupPath(path), xdisk.BackupPath(xdisk.LogPath(path))
 	_ = os.Remove(bak)
 	_ = os.Remove(bakLog)
+	if err := backupFile(path, bak); err != nil {
+		_ = os.Remove(tmp)
+		return res, fmt.Errorf("xdoc: rebuild: back up %q: %w", path, err)
+	}
+	// 日志赶在换名之前挪走：换名之后再挪，中间崩溃会让旧日志重放到新文件上。
 	if _, serr := os.Stat(xdisk.LogPath(path)); serr == nil {
 		if err := os.Rename(xdisk.LogPath(path), bakLog); err != nil {
 			_ = os.Remove(tmp)
 			return res, fmt.Errorf("xdoc: rebuild: back up log of %q: %w", path, err)
 		}
 	}
-	if err := os.Rename(path, bak); err != nil {
-		_ = os.Rename(bakLog, xdisk.LogPath(path))
-		_ = os.Remove(tmp)
-		return res, fmt.Errorf("xdoc: rebuild: back up %q: %w", path, err)
-	}
 	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Rename(bak, path)
 		_ = os.Rename(bakLog, xdisk.LogPath(path))
 		_ = os.Remove(tmp)
 		return res, fmt.Errorf("xdoc: rebuild: replace %q: %w", path, err)
 	}
+	syncDir(filepath.Dir(path))
 	res.Backup = bak
 	_ = os.Remove(xdisk.LogPath(tmp))
 	return res, nil
+}
+
+// rebuildTempPath 是重建时新库落脚的临时文件。
+func rebuildTempPath(path string) string { return path + "-rebuild.tmp" }
+
+// checkRebuildLeftovers 在数据文件不存在时，看它是不是被一次中途打断的重建换走了。
+//
+// 早先的换名顺序先把原文件改名成备份、再把临时文件改名过来，两步之间崩溃就只剩这两个文件。
+// 这时照常新建会在原路径上造出一个空库，下一次重建还会把备份覆盖掉，所以宁可拒绝打开。
+func checkRebuildLeftovers(path string) error {
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	for _, left := range []string{xdisk.BackupPath(path), rebuildTempPath(path)} {
+		if _, err := os.Stat(left); err == nil {
+			return fmt.Errorf("xdoc: open %q: the file is missing but %q exists, "+
+				"so a rebuild was probably interrupted; move that file back to %q "+
+				"(or remove it) before opening: %w", path, left, path, os.ErrNotExist)
+		}
+	}
+	return nil
+}
+
+// backupFile 让 bak 成为 path 此刻内容的一份独立副本，path 本身不动。
+//
+// 先试硬链接：瞬间完成、不占空间，之后临时文件换名顶替 path 时 bak 仍指着原来那份内容。
+// 文件系统不支持硬链接时退回整份复制。
+func backupFile(path, bak string) error {
+	if os.Link(path, bak) == nil {
+		return nil
+	}
+	return copyFile(path, bak)
+}
+
+// copyFile 把 src 复制成一个新文件 dst 并刷盘，权限照搬。
+//
+// dst 已存在时报错；中途失败把写了一半的 dst 删掉。
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	fi, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fi.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(out, in)
+	if err == nil {
+		err = out.Sync()
+	}
+	if err = errors.Join(err, out.Close()); err != nil {
+		_ = os.Remove(dst)
+	}
+	return err
+}
+
+// syncFile 重新打开一个已经关掉的文件，把它刷到设备上。
+//
+// 以读写方式打开：有的平台不许对只读句柄刷盘。
+func syncFile(name string) error {
+	f, err := os.OpenFile(name, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	return errors.Join(f.Sync(), f.Close())
+}
+
+// syncDir 把目录项的改动（新建链接、换名）刷到设备上，尽力而为。
+//
+// 不报错：有的平台（Windows）不支持对目录刷盘；而换名本身是原子的，目录没刷下去时崩溃，
+// 最坏是重启后看到换名之前那份完整的库，不会两份都丢。
+func syncDir(dir string) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	_ = d.Sync()
+	_ = d.Close()
 }
 
 // openForRebuild 以容错方式打开源库。
@@ -386,6 +479,10 @@ func (db *DB) salvageCollection(ctx context.Context, dst *DB, name string,
 // 内存库直接返回空结果——没有文件可重写。
 //
 // 会先丢掉 BEGIN 开出来的那个事务：文件马上要被整个换掉，那个事务已经无处提交。
+//
+// 直连模式下先等这个句柄上在途的操作做完，重建期间新来的操作排队等它，等不到就在库的超时
+// 到点时报错，库原样不动。遍历把行交给循环体时不算在途，所以跨过重建的遍历下一步会报错。
+// 重建失败时按原来的选项重开原文件，句柄照样能用。
 func (db *DB) Rebuild(opts ...Option) (RebuildResult, error) {
 	if db.dataPath == "" {
 		return RebuildResult{}, nil
@@ -412,27 +509,44 @@ func (db *DB) Rebuild(opts ...Option) (RebuildResult, error) {
 		return db.rebuildShared(o, opts)
 	}
 
-	if err := db.Close(); err != nil {
+	// 与检查点进排他闸门一样，最多等库的超时那么久；等不到就报错，什么都还没动。
+	var timeout time.Duration
+	db.withCore(func() { timeout = db.core.Timeout() })
+	ctx, cancel := context.Background(), context.CancelFunc(func() {})
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	release, err := db.gate.hold(ctx)
+	cancel()
+	if err != nil {
 		return RebuildResult{}, err
 	}
+	defer release()
 
-	res, err := db.opts.rebuildFile(db.dataPath, append([]Option{db.opts.withOptions()}, opts...))
-	if err != nil {
-		return res, err
+	var res RebuildResult
+	err = db.closeHandle()
+	if err == nil {
+		res, err = db.opts.rebuildFile(db.dataPath, append([]Option{db.opts.withOptions()}, opts...))
 	}
-
-	core, err := o.openOptions().OpenFile(db.dataPath)
+	// 出错时原文件还没被换掉：按原来的选项把它重开回来。
+	next := o
 	if err != nil {
-		return res, err
+		next = db.opts
 	}
-	nd := o.newDB(core)
-	nd.dataPath = db.dataPath
+	core, oerr := next.openOptions().OpenFile(db.dataPath)
+	if oerr != nil {
+		return res, errors.Join(err, oerr)
+	}
+	nd := next.newDB(core)
 
-	db.core, db.engine, db.mapper, db.auto, db.password, db.opts =
-		nd.core, nd.engine, nd.mapper, nd.auto, nd.password, nd.opts
+	db.core, db.engine = nd.core, nd.engine
+	db.engine.SetObserver(&db.hooks)
 	db.execOnce = sync.Once{}
 	db.exec = nil
-	return res, nil
+	if err == nil {
+		db.mapper, db.auto, db.password, db.opts = nd.mapper, nd.auto, nd.password, nd.opts
+	}
+	return res, err
 }
 
 // rebuildShared 在共享连接模式下重建。

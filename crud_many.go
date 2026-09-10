@@ -125,6 +125,15 @@ func (t *Tx) deleteManyIn(ctx context.Context, name, predicate string, params *x
 	defer rel()
 
 	total := 0
+	if predicate == "" {
+		// 清空只记一条集合级变更，不为整表攒主键。
+		ctx = muteChanges(ctx)
+		defer func() {
+			if total > 0 || err != nil {
+				t.db.hooks.note(t.tx, Change{Collection: name, Op: ChangeDeleteAll})
+			}
+		}()
+	}
 	err = t.eachMatched(ctx, name, predicate, params, func(batch []*Document) error {
 		ids := make([]*Value, 0, len(batch))
 		for _, d := range batch {
@@ -177,21 +186,8 @@ func (t *Tx) eachMatched(ctx context.Context, name, predicate string, params *xb
 	fn func([]*Document) error) error {
 	var last *Value
 	for {
-		qb := t.Collection(name).Query().OrderBy("_id").Limit(manyBatch).ForUpdate()
-		if predicate != "" {
-			qb = qb.Where(predicate)
-		}
-
-		if params != nil {
-			for _, k := range params.Keys() {
-				qb = qb.Param(k, params.Get(k))
-			}
-		}
-		if last != nil {
-			qb = qb.Where("$._id > @__xdoc_last").Param("__xdoc_last", last)
-		}
 		batch := make([]*Document, 0, manyBatch)
-		for d, err := range qb.All(ctx) {
+		for d, err := range t.batchQuery(name, predicate, params, last).All(ctx) {
 			if err != nil {
 				return err
 			}
@@ -209,6 +205,29 @@ func (t *Tx) eachMatched(ctx context.Context, name, predicate string, params *xb
 			return nil
 		}
 	}
+}
+
+// batchQuery 排出 [Tx.eachMatched] 的一批查询：last 为 nil 表示第一批。
+//
+// 第一批照常由优化器挑索引——谓词选择性高时走二级索引，一批就取完了。
+// 取满一批说明匹配多，之后**只走主键区间**：若仍走谓词的二级索引，_id 条件退成
+// 过滤，每批都要把剩余的全部匹配送进排序，总代价随匹配篇数平方增长；走主键区间
+// 则按 _id 有序、取满即停，整趟推进只扫一遍集合。
+func (t *Tx) batchQuery(name, predicate string, params *xbson.Document, last *Value) *QueryBuilder {
+	qb := t.Collection(name).Query().OrderBy("_id").Limit(manyBatch).ForUpdate()
+	if predicate != "" {
+		qb = qb.Where(predicate)
+	}
+
+	if params != nil {
+		for _, k := range params.Keys() {
+			qb = qb.Param(k, params.Get(k))
+		}
+	}
+	if last != nil {
+		qb = qb.Where("$._id > @__xdoc_last").Param("__xdoc_last", last).primaryOnly()
+	}
+	return qb
 }
 
 // Min 取 keySelector 的最小值，空串表示按主键。

@@ -1,6 +1,7 @@
 package xstore
 
 import (
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -48,10 +49,17 @@ func newNodeDist(a xpage.Address, dist, sim float64) nodeDist {
 type VectorGraph struct {
 	store Store
 	vx    *xpage.VectorIndex
+	loc   *VectorLocator
 }
 
 // Vector 取某个向量索引的图视图。
 func (s Store) Vector(vx *xpage.VectorIndex) VectorGraph { return VectorGraph{store: s, vx: vx} }
+
+// WithLocator 让本视图按首块地址找节点时查 loc，不再每次都扫一遍文件。loc 为 nil 时照旧扫描。
+func (g VectorGraph) WithLocator(loc *VectorLocator) VectorGraph {
+	g.loc = loc
+	return g
+}
 
 // vecCtx 是一次图操作的上下文，带一份向量缓存。
 //
@@ -60,12 +68,13 @@ func (s Store) Vector(vx *xpage.VectorIndex) VectorGraph { return VectorGraph{st
 type vecCtx struct {
 	store Store
 	vx    *xpage.VectorIndex
+	loc   *VectorLocator
 	cache map[xpage.Address][]float32
 }
 
 // ctx 开一次操作的上下文。
 func (g VectorGraph) ctx() *vecCtx {
-	return &vecCtx{store: g.store, vx: g.vx, cache: map[xpage.Address][]float32{}}
+	return &vecCtx{store: g.store, vx: g.vx, loc: g.loc, cache: map[xpage.Address][]float32{}}
 }
 
 // metric 返回本索引用的距离度量。
@@ -75,6 +84,11 @@ func (c *vecCtx) metric() xvector.Metric { return xvector.Metric(c.vx.Metric) }
 func (c *vecCtx) saveMeta() error {
 	return c.store.CollectionPage().UpdateVectorIndex(c.vx)
 }
+
+// shared 报告集合上是不是不止本索引这一条向量索引。
+//
+// 节点上没记它属于哪条索引，只有这时按首块地址扫到的节点才可能是别的索引的。
+func (c *vecCtx) shared() bool { return len(c.store.CollectionPage().VectorIndexes()) > 1 }
 
 // getFreeVectorPage 取向量索引空闲链的头页；链空就新建一页。
 func (s Store) getFreeVectorPage(head uint32) (*xpage.Page, error) {
@@ -224,6 +238,7 @@ func (c *vecCtx) insert(dataBlock xpage.Address, vec []float32) error {
 	}
 	page.MarkDirty()
 	newAddr := xpage.Address{PageID: page.ID(), Index: idx}
+	c.loc.add(c.vx.Slot, dataBlock, newAddr)
 	if c.vx.FreePageList, err = c.store.syncIndexFreeList(page, c.vx.FreePageList); err != nil {
 		return err
 	}
@@ -419,17 +434,43 @@ func (c *vecCtx) prune(source xpage.Address, neighbors []xpage.Address) ([]xpage
 	return out, nil
 }
 
-// remove 把某篇文档的向量节点从图里摘掉并回收。
+// remove 把某篇文档在本索引上的向量节点从图里摘掉并回收。
+//
+// 集合上只有这一条向量索引、又没带定位表时，逐页扫到的第一个节点就是它；
+// 否则经定位表挑出该摘的节点，见 [VectorLocator.targets]。
+func (c *vecCtx) remove(dataBlock xpage.Address) error {
+	if c.loc == nil && !c.shared() {
+		addr, node, ok, err := c.findByDataBlock(dataBlock)
+		if err != nil || !ok {
+			return err
+		}
+		return c.removeNode(addr, node)
+	}
+	if c.loc == nil {
+		c.loc = new(VectorLocator)
+	}
+	addrs, err := c.loc.targets(c, dataBlock)
+	if err != nil {
+		return err
+	}
+	for _, a := range addrs {
+		node, _, err := c.node(a)
+		if err != nil {
+			return err
+		}
+		if err := c.removeNode(a, node); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeNode 把一个节点从图里摘掉并回收。
 //
 // 先记下一个还活着的邻居当作找新根的起点，再逐层把所有指向它的回边撤掉。
 // 它正好是根时，从那个起点走一遍连通分量，挑层数最高的当新根；
 // 没有邻居可走就把根置空——这个节点本来就是图里仅剩的一个。
-func (c *vecCtx) remove(dataBlock xpage.Address) error {
-	addr, node, ok, err := c.findByDataBlock(dataBlock)
-	if err != nil || !ok {
-		return err
-	}
-
+func (c *vecCtx) removeNode(addr xpage.Address, node xpage.VectorNode) error {
 	start := xpage.EmptyAddress
 	levels := node.LevelCount()
 	for level := 0; level < levels && start.IsEmpty(); level++ {
@@ -546,9 +587,10 @@ func (c *vecCtx) scanNodes(fn func(addr xpage.Address, n xpage.VectorNode) (bool
 	return nil
 }
 
-// findByDataBlock 按文档首块地址找到它的向量节点。
+// findByDataBlock 按文档首块地址逐页扫出它的向量节点，碰到第一个就停。
 //
-// 只能靠扫描：图里没有从文档到节点的反向索引。
+// 图里没有从文档到节点的反向索引，只能靠扫描。扫描不分索引，
+// 所以只在集合上仅有一条向量索引时才能这样找。
 func (c *vecCtx) findByDataBlock(dataBlock xpage.Address) (xpage.Address, xpage.VectorNode, bool, error) {
 	var (
 		found xpage.Address
@@ -565,7 +607,229 @@ func (c *vecCtx) findByDataBlock(dataBlock xpage.Address) (xpage.Address, xpage.
 	return found, node, ok, err
 }
 
+// VectorLocator 是一批删改共用的节点定位表：文档首块地址 → 向量节点地址。
+//
+// 逐篇扫描的代价是篇数乘页数。定位表头一回用到时扫一趟，此后随节点的建立与回收
+// 同步增删；同一个首块地址有几个节点时按扫描次序排好。集合上只有一条向量索引时，
+// 查到的总是扫描会先碰到的那个——图怎么改、落盘什么字节，都与逐篇扫描一样。
+//
+// 扫描不分索引，看的是本集合所有向量索引页，所以同一批里的各个向量索引共用一份。
+// 节点上又没记它属于哪条索引，同一个首块地址底下可能挂着几条索引各自的节点，
+// 要分辨时另外认一回归属，见 [VectorLocator.claim]。
+// 它只对建它的那个快照、那个集合有效，批次结束或中途出错就丢掉。零值即可用。
+type VectorLocator struct {
+	// nodes 为 nil 表示还没扫过。
+	nodes map[xpage.Address][]xpage.Address
+
+	// owners、pages 记着认得出归属的节点与页各属于哪条向量索引（记槽号），本批新建的随建随记；
+	// claimed 为真表示已从各条索引的空闲链与根认过一回，此后没记着的就是认不出归属的。
+	owners  map[xpage.Address]uint8
+	pages   map[uint32]uint8
+	claimed bool
+}
+
+// scan 头一回调用时扫一趟建表。
+func (l *VectorLocator) scan(c *vecCtx) error {
+	if l.nodes != nil {
+		return nil
+	}
+	nodes := map[xpage.Address][]xpage.Address{}
+	if err := c.scanNodes(func(a xpage.Address, n xpage.VectorNode) (bool, error) {
+		nodes[n.DataBlock()] = append(nodes[n.DataBlock()], a)
+		return false, nil
+	}); err != nil {
+		return err
+	}
+	l.nodes = nodes
+	return nil
+}
+
+// targets 找出本索引这次该摘掉的节点，按扫描次序排。
+//
+// 集合上只有这一条向量索引、这篇文档也只挂着一个节点时，那个节点就是；否则先认归属，
+// 再按 [VectorLocator.mine] 挑。
+func (l *VectorLocator) targets(c *vecCtx, dataBlock xpage.Address) ([]xpage.Address, error) {
+	if err := l.scan(c); err != nil {
+		return nil, err
+	}
+	addrs := l.nodes[dataBlock]
+	if len(addrs) == 0 || (len(addrs) == 1 && !c.shared()) {
+		return slices.Clone(addrs), nil
+	}
+	if err := l.claim(c); err != nil {
+		return nil, err
+	}
+	out := make([]xpage.Address, 0, len(addrs))
+	for _, a := range addrs {
+		if l.mine(a, c.vx.Slot) {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// mine 判断认过归属之后，节点 a 该不该由槽号为 slot 的索引摘掉。
+//
+// 认得出归属的看归属：本索引的摘，别的索引的一个不碰。认不出的是从哪条索引的根都走不到的孤儿，
+// 检索碰不到它、建图也再不会给它连边，趁这次清掉，免得文档删了它还指着；但只清落在本索引的页
+// 或无主页上的，别的索引的页一概不碰——那条索引处理同一篇文档时自会清掉。
+func (l *VectorLocator) mine(a xpage.Address, slot uint8) bool {
+	if owner, ok := l.owners[a]; ok {
+		return owner == slot
+	}
+	owner, ok := l.pages[a.PageID]
+	return !ok || owner == slot
+}
+
+// claim 认一回归属，只认一次：先顺着每条向量索引的空闲页链认页，再从每条索引的根
+// 广度优先走遍它的图，走到的节点归这条索引，节点所在的页没认过的也归它。本批新建的早已记着。
+//
+// 每条索引只从自己的空闲链或新页上划节点，边也只连在同一条索引的节点之间，所以这样认不会认错。
+// 走不到的节点认不出归属，但它此后也不会再被走到：新边只连向从根搜得到的节点，
+// 删节点、换根只会让走得到的变少。只放着这种节点、又不在空闲链上的页同样认不出。
+func (l *VectorLocator) claim(c *vecCtx) error {
+	if l.claimed {
+		return nil
+	}
+	l.init()
+	vxs := c.store.CollectionPage().VectorIndexes()
+	limit := c.store.ChainLimit()
+	for _, vx := range vxs {
+		for id, n := vx.FreePageList, 0; id != xpage.EmptyPageID; n++ {
+			if n > limit {
+				return fmt.Errorf("%w: free page list of vector index %q does not end", xpage.ErrCorrupt, vx.Name)
+			}
+			page, err := c.store.GetPage(id)
+			if err != nil {
+				return err
+			}
+			if _, ok := l.pages[id]; !ok {
+				l.pages[id] = vx.Slot
+			}
+			id = page.NextPageID()
+		}
+	}
+	// 走过的节点另记一份：本批新建的早在 owners 里，拿它判重会漏走它们后面的邻居。
+	seen := map[xpage.Address]bool{}
+	for _, vx := range vxs {
+		if vx.Root.IsEmpty() || seen[vx.Root] {
+			continue
+		}
+		seen[vx.Root] = true
+		queue := []xpage.Address{vx.Root}
+		for len(queue) > 0 {
+			a := queue[0]
+			queue = queue[1:]
+			n, _, err := c.node(a)
+			if err != nil {
+				return err
+			}
+			if _, ok := l.owners[a]; !ok {
+				l.owners[a] = vx.Slot
+			}
+			if _, ok := l.pages[a.PageID]; !ok {
+				l.pages[a.PageID] = vx.Slot
+			}
+			for level := range n.LevelCount() {
+				ns, err := n.Neighbors(level)
+				if err != nil {
+					return err
+				}
+				for _, b := range ns {
+					if !b.IsEmpty() && !seen[b] {
+						seen[b] = true
+						queue = append(queue, b)
+					}
+				}
+			}
+		}
+	}
+	l.claimed = true
+	return nil
+}
+
+// init 备好记归属的两张表。
+func (l *VectorLocator) init() {
+	if l.owners == nil {
+		l.owners = map[xpage.Address]uint8{}
+		l.pages = map[uint32]uint8{}
+	}
+}
+
+// add 记下槽号为 slot 的索引新建的节点：先记上它与所在页的归属——同一批里别的索引就不会把它
+// 当成孤儿清掉；扫过的话再插进扫描次序里它该在的位置，还没扫过就不用插，扫的时候自然看得到。
+func (l *VectorLocator) add(slot uint8, dataBlock, addr xpage.Address) {
+	if l == nil {
+		return
+	}
+	l.init()
+	l.owners[addr] = slot
+	l.pages[addr.PageID] = slot
+	if l.nodes == nil {
+		return
+	}
+	addrs := l.nodes[dataBlock]
+	i, _ := slices.BinarySearchFunc(addrs, addr, compareScanOrder)
+	l.nodes[dataBlock] = slices.Insert(addrs, i, addr)
+}
+
+// drop 抹掉一个已回收的节点。
+func (l *VectorLocator) drop(dataBlock, addr xpage.Address) {
+	if l == nil {
+		return
+	}
+	delete(l.owners, addr)
+	if l.nodes == nil {
+		return
+	}
+	addrs := slices.DeleteFunc(l.nodes[dataBlock], func(a xpage.Address) bool { return a == addr })
+	if len(addrs) == 0 {
+		delete(l.nodes, dataBlock)
+		return
+	}
+	l.nodes[dataBlock] = addrs
+}
+
+// ownPage 按一页重新挂链之后的样子更新它的归属：整页回收了就忘掉，挂在空闲链上就记给
+// 槽号为 slot 的索引。没认过归属时什么也不做。
+func (l *VectorLocator) ownPage(id uint32, deleted, onList bool, slot uint8) {
+	switch {
+	case l == nil || l.pages == nil:
+	case deleted:
+		delete(l.pages, id)
+	case onList:
+		l.pages[id] = slot
+	}
+}
+
+// compareScanOrder 按 [vecCtx.scanNodes] 碰到的先后比较两个节点地址：先页号，再槽号。
+func compareScanOrder(a, b xpage.Address) int {
+	return cmp.Or(cmp.Compare(a.PageID, b.PageID), cmp.Compare(a.Index, b.Index))
+}
+
+// listOwner 返回某页的空闲链归哪条向量索引管：认出了归属的按归属，
+// 认不出的（页上只剩孤儿节点、也不在哪条空闲链上）归本索引。
+func (c *vecCtx) listOwner(pageID uint32) *xpage.VectorIndex {
+	if c.loc == nil || c.loc.pages == nil {
+		return c.vx
+	}
+	slot, ok := c.loc.pages[pageID]
+	if !ok || slot == c.vx.Slot {
+		return c.vx
+	}
+	vxs := c.store.CollectionPage().VectorIndexes()
+	for i := range vxs {
+		if vxs[i].Slot == slot {
+			return &vxs[i]
+		}
+	}
+	return c.vx
+}
+
 // release 删掉一个向量节点，连同它的外部向量文档，并更新空闲链。
+//
+// 页要挂回它所属那条索引的空闲链，哪怕这次是本索引替别的索引清孤儿：
+// 一页只归一条索引，才不会把别的索引的节点划到本索引的页上。
 func (c *vecCtx) release(addr xpage.Address, node xpage.VectorNode) error {
 	if !node.HasInlineVector() {
 		if ext := node.ExternalVector(); !ext.IsEmpty() {
@@ -578,21 +842,29 @@ func (c *vecCtx) release(addr xpage.Address, node xpage.VectorNode) error {
 	if err != nil {
 		return err
 	}
+	block := node.DataBlock()
 	if err := page.Delete(addr.Index); err != nil {
 		return err
 	}
 	page.MarkDirty()
 	delete(c.cache, addr)
-	if c.vx.FreePageList, err = c.store.syncIndexFreeList(page, c.vx.FreePageList); err != nil {
+	c.loc.drop(block, addr)
+	vx := c.listOwner(addr.PageID)
+	deleted := page.ItemsCount() == 0
+	if vx.FreePageList, err = c.store.syncIndexFreeList(page, vx.FreePageList); err != nil {
 		return err
 	}
-	return c.saveMeta()
+	c.loc.ownPage(addr.PageID, deleted, !deleted && page.PageListSlot() == 0, vx.Slot)
+	return c.store.CollectionPage().UpdateVectorIndex(vx)
 }
 
 // Drop 清空整个向量索引：删掉所有节点与外部向量，根置空。
 //
-// 先扫一遍把地址都收齐再删——边扫边删会改动正在扫的那些页。
-func (g VectorGraph) Drop() error {
+// 先扫一遍把地址都收齐再删——边扫边删会改动正在扫的那些页。集合上还有别的向量索引时，
+// 只删 [VectorLocator.mine] 挑出来的：本索引的节点，和落在本索引的页或无主页上的孤儿。
+// 这样本索引的页全数腾空回收，别的索引的节点与页原样留着。
+// safepoint 非空时每删一个节点之前调一次。
+func (g VectorGraph) Drop(safepoint func() error) error {
 	c := g.ctx()
 
 	var addrs []xpage.Address
@@ -602,7 +874,21 @@ func (g VectorGraph) Drop() error {
 	}); err != nil {
 		return err
 	}
+	if c.shared() {
+		if c.loc == nil {
+			c.loc = new(VectorLocator)
+		}
+		if err := c.loc.claim(c); err != nil {
+			return err
+		}
+		addrs = slices.DeleteFunc(addrs, func(a xpage.Address) bool { return !c.loc.mine(a, c.vx.Slot) })
+	}
 	for _, a := range addrs {
+		if safepoint != nil {
+			if err := safepoint(); err != nil {
+				return err
+			}
+		}
 		n, _, err := c.node(a)
 		if err != nil {
 			return err

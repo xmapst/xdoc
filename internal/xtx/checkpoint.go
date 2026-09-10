@@ -2,6 +2,7 @@ package xtx
 
 import (
 	"context"
+	"time"
 
 	"github.com/xmapst/xdoc/internal/xdisk"
 	"github.com/xmapst/xdoc/internal/xpage"
@@ -9,7 +10,7 @@ import (
 
 // Checkpoint 把日志里已确认的页搬回数据文件，返回搬了几页。
 //
-// 要拿排他闸门，因此会等所有事务结束。
+// 要拿排他闸门，因此会等所有事务结束；排队期间新开的事务要等它做完或者超时放弃。
 func (c *Core) Checkpoint(ctx context.Context) (int, error) {
 	ctx, cancel := c.withTimeout(ctx)
 	defer cancel()
@@ -37,7 +38,9 @@ func (c *Core) TryCheckpoint() (int, bool, error) {
 // 清掉：落到数据文件里的页不再属于任何事务。
 //
 // 搬完先把数据文件刷到设备，再清日志——顺序反了的话，两步之间断电就两头落空。
-func (c *Core) checkpointLocked() (int, error) {
+//
+// 日志非空、真正动手的那些计进 [Stats]；失败的另记一条日志。
+func (c *Core) checkpointLocked() (n int, err error) {
 	c.headerMu.Lock()
 	defer c.headerMu.Unlock()
 
@@ -45,12 +48,13 @@ func (c *Core) checkpointLocked() (int, error) {
 	if pages == 0 {
 		return 0, nil
 	}
+	start := time.Now()
+	defer func() { c.observeCheckpoint(start, pages, n, err) }()
 
 	const runPages = 512
 	run := make([]byte, runPages*xpage.PageSize)
 	batch := make([]xdisk.DataPageWrite, 0, runPages)
 	moved := make(map[uint32]struct{}, runPages)
-	n := 0
 	for i := int64(0); i < pages; i += runPages {
 		got := min(int64(runPages), pages-i)
 		buf := run[:got*xpage.PageSize]
@@ -87,6 +91,7 @@ func (c *Core) checkpointLocked() (int, error) {
 		return n, err
 	}
 	c.wal.Clear()
+	c.forceCheckpointAt.Store(0)
 
 	c.cache.DropLogAndData(moved)
 	return n, nil

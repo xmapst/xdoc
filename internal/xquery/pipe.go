@@ -16,6 +16,43 @@ type refTarget struct {
 	pk    *xpage.CollectionIndex
 }
 
+// find 按主键读出被引用的文档并解码，不存在时返回 nil。
+func (t *refTarget) find(id *xbson.Value, opts evalOpts) (*xbson.Document, error) {
+	st := xstore.New(t.pages)
+	node, err := st.List(t.pk).Find(id, false, Ascending, opts.coll)
+	if err != nil || node == nil {
+		return nil, err
+	}
+	raw, err := st.ReadDocument(node.DataBlock(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return xbson.DecodeIn(raw, opts.loc)
+}
+
+// refCacheSize 是每个被引用集合在一次展开里最多记住多少篇文档。
+const refCacheSize = 64
+
+// refCache 是一次展开里某个被引用集合的入口，连同已经读出来的文档。
+//
+// docs 以主键的索引键编码为键，值为 nil 表示目标不存在。**只在展开阶段自己手里用，
+// 交出去的一律是克隆**。
+type refCache struct {
+	target *refTarget
+	docs   map[string]*xbson.Document
+}
+
+// put 记下一篇文档；记满了随手丢掉一篇，只求挡住同一个 `$id` 反复出现的情形。
+func (c *refCache) put(key string, doc *xbson.Document) {
+	if len(c.docs) >= refCacheSize {
+		for k := range c.docs {
+			delete(c.docs, k)
+			break
+		}
+	}
+	c.docs[key] = doc
+}
+
 // stage 是流水线上的一段，流过的是带地址的文档。
 type stage iter.Seq2[row, error]
 
@@ -88,54 +125,61 @@ func (src stage) filter(expr xbexpr.Node, params *xbson.Document, opts evalOpts)
 // 再把目标文档除 `_id` 外的字段合并进来；目标不存在就打上 `$missing`。
 // 路径指向数组时，逐项展开其中的文档。
 //
-// 集合入口按名字缓存一份，连着展开同一个集合时不必反复取快照。
+// 集合入口按名字缓存一份，被引用的文档按主键记住一小批：同一个 `$id`
+// 反复出现时不必每次都查找、读取、解码。**合并进来的是克隆**，
+// 调用方改动返回的文档不会串到缓存、进而串到别的文档里。
 func (src stage) include(path xbexpr.Node, params *xbson.Document,
 	opts evalOpts, resolve func(string) (*refTarget, error)) stage {
 	return func(yield func(row, error) bool) {
-		var lastName string
-		var last *refTarget
+		refs := make(map[string]*refCache)
+		var idKey []byte
 
 		doInclude := func(v *xbson.Document) error {
 			refID := v.Get("$id")
-			refCol := v.Get("$ref")
-			name, ok := refCol.AsString()
+			name, ok := v.Get("$ref").AsString()
 			if refID.IsNull() || !ok {
 				return nil
 			}
-			if name != lastName || last == nil {
+			rc := refs[name]
+			if rc == nil {
 				t, err := resolve(name)
 				if err != nil {
 					return err
 				}
-				lastName, last = name, t
+				rc = &refCache{target: t, docs: make(map[string]*xbson.Document)}
+				refs[name] = rc
 			}
-			if last == nil || last.pk == nil {
+			if rc.target == nil || rc.target.pk == nil {
 				return nil
-			}
-			st := xstore.New(last.pages)
-			node, err := st.List(last.pk).Find(refID, false, Ascending, opts.coll)
-			if err != nil {
-				return err
-			}
-			if node == nil {
-				v.Set("$missing", xbson.True)
-				return nil
-			}
-			raw, err := st.ReadDocument(node.DataBlock(), nil)
-			if err != nil {
-				return err
 			}
 
-			ref, err := xbson.DecodeIn(raw, opts.loc)
-			if err != nil {
-				return err
+			// 主键编不成索引键的不进缓存，照旧每次去查。
+			var ref *xbson.Document
+			var err error
+			idKey, err = refID.AppendIndexKey(idKey[:0])
+			cacheable, hit := err == nil, false
+			if cacheable {
+				ref, hit = rc.docs[string(idKey)]
+			}
+			if !hit {
+				if ref, err = rc.target.find(refID, opts); err != nil {
+					return err
+				}
+				if cacheable {
+					rc.put(string(idKey), ref)
+				}
+			}
+
+			if ref == nil {
+				v.Set("$missing", xbson.True)
+				return nil
 			}
 			v.Delete("$ref")
 			for k, val := range ref.Elements() {
 				if k == "_id" {
 					continue
 				}
-				v.Set(k, val)
+				v.Set(k, val.Clone())
 			}
 			return nil
 		}

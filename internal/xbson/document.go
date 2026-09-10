@@ -65,23 +65,38 @@ func DocumentOf(kv ...any) *Document {
 //
 // 没有小写字母时原样返回，省掉一次分配。
 func foldKey(k string) string {
-	need := false
-	for i := 0; i < len(k); i++ {
-		if c := k[i]; c >= 'a' && c <= 'z' {
-			need = true
-			break
-		}
-	}
-	if !need {
+	if !hasLower(k) {
 		return k
 	}
-	b := []byte(k)
+	var buf [foldBufSize]byte
+	return string(foldInto(&buf, k))
+}
+
+// hasLower 报告键名里有没有 ASCII 小写字母。
+func hasLower(k string) bool {
+	for i := 0; i < len(k); i++ {
+		if c := k[i]; c >= 'a' && c <= 'z' {
+			return true
+		}
+	}
+	return false
+}
+
+// foldBufSize 是折叠键名用的栈上缓冲大小，更长的键名才上堆。
+const foldBufSize = 64
+
+// foldInto 把键名折进 buf，返回折好的字节。
+//
+// 调用方把 buf 放在栈上：查表写成 m[string(b)] 编译器不分配新串，
+// 要留下的串也只在 string(b) 那一步分配一次。
+func foldInto(buf *[foldBufSize]byte, k string) []byte {
+	b := append(buf[:0], k...)
 	for i, c := range b {
 		if c >= 'a' && c <= 'z' {
 			b[i] = c - 'a' + 'A'
 		}
 	}
-	return string(b)
+	return b
 }
 
 // foldEqual 按折叠后的形式比较两个键名，不实际分配新串。
@@ -119,7 +134,15 @@ func (d *Document) find(key string) int {
 		}
 		return -1
 	}
-	if i, ok := d.idx[foldKey(key)]; ok {
+	if !hasLower(key) {
+		if i, ok := d.idx[key]; ok {
+			return i
+		}
+		return -1
+	}
+	// 不调 foldKey：那样超过 32 字节的键名每查一次都要上堆。
+	var buf [foldBufSize]byte
+	if i, ok := d.idx[string(foldInto(&buf, key))]; ok {
 		return i
 	}
 	return -1
@@ -162,6 +185,26 @@ func (d *Document) Set(key string, v *Value) {
 		d.vals[i] = v
 		return
 	}
+	d.push(key, v)
+}
+
+// add 追加一个文档里还没有的键，已有则什么也不改、返回 false。
+//
+// 给解码查重用：查重与插入共用一次查找，不必先 Has 再 Set 查两遍。
+func (d *Document) add(key string, v *Value) bool {
+	if d.find(key) >= 0 {
+		return false
+	}
+	if v == nil {
+		v = Null
+	}
+	d.invalidate()
+	d.push(key, v)
+	return true
+}
+
+// push 把确定没有的键追加到末尾，键多了就建索引。
+func (d *Document) push(key string, v *Value) {
 	if d.idx != nil {
 		d.idx[foldKey(key)] = len(d.keys)
 	}

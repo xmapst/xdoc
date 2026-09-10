@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -16,7 +15,7 @@ import (
 type Strategy int
 
 const (
-	// StrategyDefault 用转义后的路径，太长时（只在 Windows 上会碰到）自动退到摘要。
+	// StrategyDefault 用转义后的路径，太长时自动退到摘要。
 	StrategyDefault Strategy = iota
 
 	// StrategyUriEscape 一律用转义后的路径。
@@ -28,7 +27,10 @@ const (
 
 // Name 算出这份库的锁名。
 //
-// 路径先归一：转成绝对路径再转小写，这样同一份文件的不同写法算出同一个名字。
+// 路径先归一：转成绝对路径、解开软链接再转小写，这样同一份文件的不同写法算出同一个名字。
+//
+// 转义后太长时各平台都退到摘要：锁名要当文件名用，非 ASCII 字符转义后膨胀成三倍，
+// 不到三十个汉字就会超出文件系统的 NAME_MAX。
 func (s Strategy) Name(path string) (string, error) {
 	norm, err := normalize(path)
 	if err != nil {
@@ -38,7 +40,7 @@ func (s Strategy) Name(path string) (string, error) {
 	case StrategyDefault, StrategyUriEscape:
 		uri := escapeData(norm)
 
-		if runtime.GOOS == "windows" && len(uri)+conservativePrefixLen > windowsNameMax {
+		if len(uri)+conservativePrefixLen > nameMax {
 			return "sha1-" + sha1Hex(norm), nil
 		}
 		return uri, nil
@@ -49,8 +51,9 @@ func (s Strategy) Name(path string) (string, error) {
 }
 
 const (
-	// windowsNameMax 是内核对象名的长度上限，留了一点余量。
-	windowsNameMax = 250
+	// nameMax 是锁名连同前后缀的长度上限：取 Windows 内核对象名的上限并留了一点余量，
+	// 它也小于常见文件系统的 NAME_MAX（255 字节）。
+	nameMax = 250
 
 	// conservativePrefixLen 是全局前缀与后缀要占掉的字符数。
 	conservativePrefixLen = 13
@@ -64,7 +67,7 @@ func sha1Hex(s string) string {
 	return strings.ToUpper(hex.EncodeToString(sum[:]))
 }
 
-// normalize 把路径转成绝对路径并转小写。
+// normalize 把路径转成绝对路径、解开软链接并转小写。
 //
 // 转小写会让区分大小写的文件系统上两份不同的文件算出同一个锁名——
 // 那只是多一次互斥，不会出错；反过来漏掉互斥才是真问题。
@@ -73,7 +76,21 @@ func normalize(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("xlock: resolve %q: %w", path, err)
 	}
-	return strings.ToLower(abs), nil
+	return strings.ToLower(resolveLinks(abs)), nil
+}
+
+// resolveLinks 解开路径上的软链接，让经由链接打开的同一份文件落到同一把锁上。
+//
+// 文件还不存在（共享模式打开时不碰文件）就只解它的父目录；父目录也解不开时
+// 原样用绝对路径。
+func resolveLinks(abs string) string {
+	if p, err := filepath.EvalSymlinks(abs); err == nil {
+		return p
+	}
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
+		return filepath.Join(dir, filepath.Base(abs))
+	}
+	return abs
 }
 
 // escapeData 把路径转义成只含无保留字符的形式。

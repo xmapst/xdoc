@@ -16,7 +16,7 @@ import (
 // 算出来的长度与实际写出的对不上时报错——那是编码器自身的缺陷，
 // 放过去会写出一份长度字段错误、谁也读不回来的文档。
 func (d *Document) Encode() ([]byte, error) {
-	n, err := d.encodedSize()
+	n, err := d.encodedSize(0)
 	if err != nil {
 		return nil, err
 	}
@@ -33,14 +33,17 @@ func (d *Document) Encode() ([]byte, error) {
 
 // encodedSize 算出文档编码后的字节数，并记进缓存。
 //
-// 5 是固定开销：4 字节长度加 1 字节结束标记。
-func (d *Document) encodedSize() (int, error) {
+// 5 是固定开销：4 字节长度加 1 字节结束标记。depth 是外面已经套了几层。
+func (d *Document) encodedSize(depth int) (int, error) {
 	if d == nil {
 		return 5, nil
 	}
+	if err := checkNestingDepth(depth); err != nil {
+		return 0, err
+	}
 	total := 5
 	for k, v := range d.Elements() {
-		n, err := v.elementSize(k)
+		n, err := v.elementSize(k, depth+1)
 		if err != nil {
 			return 0, err
 		}
@@ -51,13 +54,16 @@ func (d *Document) encodedSize() (int, error) {
 }
 
 // encodedSize 算出数组编码后的字节数，并记进缓存。
-func (a *Array) encodedSize() (int, error) {
+func (a *Array) encodedSize(depth int) (int, error) {
 	if a == nil {
 		return 5, nil
 	}
+	if err := checkNestingDepth(depth); err != nil {
+		return 0, err
+	}
 	total := 5
 	for i, v := range a.items {
-		n, err := v.elementSize(arrayKey(i))
+		n, err := v.elementSize(arrayKey(i), depth+1)
 		if err != nil {
 			return 0, err
 		}
@@ -67,15 +73,25 @@ func (a *Array) encodedSize() (int, error) {
 	return total, nil
 }
 
+// checkNestingDepth 在写侧卡住嵌套深度，上限与读侧同为 [maxNestingDepth]。
+//
+// 超了就报错而不是照写：照写出去的文档读不回来。
+func checkNestingDepth(depth int) error {
+	if depth >= maxNestingDepth {
+		return fmt.Errorf("xbson: document nested deeper than %d levels", maxNestingDepth)
+	}
+	return nil
+}
+
 // elementSize 算出「类型标记 + 键名 + 0 + 载荷」的字节数。
 //
 // 键名在这里查一次合法性：它以 0 结尾存放，串里再有一个 0
 // 就会在读的时候提前截断。
-func (v *Value) elementSize(key string) (int, error) {
+func (v *Value) elementSize(key string, depth int) (int, error) {
 	if err := xbin.ValidateCString(key); err != nil {
 		return 0, fmt.Errorf("xbson: invalid element name: %w", err)
 	}
-	n, err := v.payloadSize()
+	n, err := v.payloadSize(depth)
 	if err != nil {
 		return 0, err
 	}
@@ -86,7 +102,7 @@ func (v *Value) elementSize(key string) (int, error) {
 //
 // 字符串在这里查合法性——不合法的 UTF-8 写进去，读回来会变成
 // 替换字符，那时原始内容已经找不回来了。
-func (v *Value) payloadSize() (int, error) {
+func (v *Value) payloadSize(depth int) (int, error) {
 	switch v.t {
 	case TypeMinValue, TypeNull, TypeMaxValue:
 		return 0, nil
@@ -118,10 +134,10 @@ func (v *Value) payloadSize() (int, error) {
 		return 2 + 4*len(f), nil
 	case TypeDocument:
 		d, _ := v.AsDocument()
-		return d.encodedSize()
+		return d.encodedSize(depth)
 	case TypeArray:
 		a, _ := v.AsArray()
-		return a.encodedSize()
+		return a.encodedSize(depth)
 	default:
 		return 0, fmt.Errorf("xbson: cannot encode type %s", v.t)
 	}
@@ -134,7 +150,7 @@ func (d *Document) appendTo(dst []byte) ([]byte, error) {
 	n := d.length
 	if n == 0 {
 		var err error
-		if n, err = d.encodedSize(); err != nil {
+		if n, err = d.encodedSize(0); err != nil {
 			return nil, err
 		}
 	}
@@ -153,7 +169,7 @@ func (a *Array) appendTo(dst []byte) ([]byte, error) {
 	n := a.length
 	if n == 0 {
 		var err error
-		if n, err = a.encodedSize(); err != nil {
+		if n, err = a.encodedSize(0); err != nil {
 			return nil, err
 		}
 	}

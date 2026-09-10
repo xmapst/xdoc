@@ -54,7 +54,7 @@ type def struct {
 // registry 是全部内建方法，键由方法名和实参个数拼成。
 //
 // 同名不同实参个数算两个方法，各自注册。各 method_*.go 在 init 里往里填。
-var registry = map[string]def{}
+var registry = map[string]*def{}
 
 // lambdaRegistry 是带 lambda 的那些方法，见 method_lambda.go。
 var lambdaRegistry = map[string]lambdaDef{}
@@ -66,7 +66,7 @@ func key(name string, argc int) string {
 
 // reg 登记一个方法，实参个数取自签名。
 func reg(name string, fn Method, info Info) {
-	registry[key(name, len(info.Params))] = def{fn: fn, info: info}
+	registry[key(name, len(info.Params))] = &def{fn: fn, info: info}
 }
 
 // scalars 造一份 n 个标量形参的签名，[ParamScalar] 正好是零值。
@@ -77,26 +77,47 @@ func scalars(n int) []ParamKind { return make([]ParamKind, n) }
 // 返回的是一层包装：实参个数不符时报错，ctx 为空时给一个最小的默认环境，
 // nil 实参一律换成 Null——各方法实现因此不必自己判空。
 func Lookup(name string, argc int) Method {
-	d, ok := registry[key(name, argc)]
-	if !ok {
+	d := registry[key(name, argc)]
+	if d == nil {
 		return nil
 	}
-	want := len(d.info.Params)
-	fn := d.fn
 	return func(ctx *Ctx, args []*xbson.Value) (*xbson.Value, error) {
-		if len(args) != want {
-			return nil, errf("method %s expects %d argument(s), got %d", strings.ToUpper(name), want, len(args))
-		}
-		if ctx == nil {
-			ctx = &Ctx{Root: xbson.Null, Collation: xcoll.Binary}
-		}
-		for i, a := range args {
-			if a == nil {
-				args[i] = xbson.Null
-			}
-		}
-		return fn(ctx, args)
+		return d.call(name, ctx, args)
 	}
+}
+
+// call 就是 [Lookup] 包装的那一层，name 只用来报错。
+//
+// 求值器拿着节点上记下的表项直接调它，免得每次调用都查表、造闭包。
+func (d *def) call(name string, ctx *Ctx, args []*xbson.Value) (*xbson.Value, error) {
+	if want := len(d.info.Params); len(args) != want {
+		return nil, errf("method %s expects %d argument(s), got %d", strings.ToUpper(name), want, len(args))
+	}
+	if ctx == nil {
+		ctx = &Ctx{Root: xbson.Null, Collation: xcoll.Binary}
+	}
+	for i, a := range args {
+		if a == nil {
+			args[i] = xbson.Null
+		}
+	}
+	return d.fn(ctx, args)
+}
+
+// resolve 取这次调用对应的方法表项，找不到返回 nil。
+//
+// 方法名与实参个数定下来就不再变，查到一次便记在节点上：解析器核对方法时
+// 就已填好，xquery 那样直接造的节点在头一次用到时填。编译好的表达式会被
+// 多个 goroutine 共用，所以用原子指针；并发填进去的是同一项，谁先写都一样。
+func (n *CallNode) resolve() *def {
+	if d := n.method.Load(); d != nil {
+		return d
+	}
+	d := registry[key(n.Name, len(n.Args))]
+	if d != nil {
+		n.method.Store(d)
+	}
+	return d
 }
 
 // MethodInfo 取这次调用对应的方法签名。
@@ -104,8 +125,8 @@ func (n *CallNode) MethodInfo() (Info, bool) {
 	if n == nil {
 		return Info{}, false
 	}
-	d, ok := registry[key(n.Name, len(n.Args))]
-	if !ok {
+	d := n.resolve()
+	if d == nil {
 		return Info{}, false
 	}
 	return d.info, true

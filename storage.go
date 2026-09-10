@@ -8,12 +8,15 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xmapst/xdoc/internal/xbson"
 	"github.com/xmapst/xdoc/internal/xengine"
+	"github.com/xmapst/xdoc/internal/xtx"
 )
 
 const (
@@ -180,11 +183,37 @@ func emptyToNull(s string) *Value {
 //
 // 主键本身就带序，同一文件的块因此在主键索引上连续排列，顺序读一路走下去
 // 不必来回跳。
-func chunkID(fileID *Value, n int32) *Value {
+func chunkID(fileID *Value, n int32) *Value { return chunkKey(fileID, xbson.Int32(n)) }
+
+// chunkKey 同 [chunkID]，只是块号可以是 MinValue/MaxValue，用来框出一个文件的全部块。
+func chunkKey(fileID, n *Value) *Value {
 	d := xbson.NewDocument()
 	d.Set(chunkFieldFile, fileID)
-	d.Set(chunkFieldIndex, xbson.Int32(n))
+	d.Set(chunkFieldIndex, n)
 	return d.Value()
+}
+
+// clearChunksIn 在给定事务里删掉 fileID 名下的全部块，块号连不连续都一样。
+//
+// 按主键区间 {f: id, n: MinValue}..{f: id, n: MaxValue} 删：主键文档里的字段按二进制序比，
+// 这一段恰好是插入时会与 id 撞主键的那些块。区间里没有块时只读不写，所在事务写出的字节不变。
+func (s *Storage) clearChunksIn(ctx context.Context, tx *xtx.Transaction, fileID *Value) error {
+	_, err := s.chunks.db.engine.DeleteRangeIn(ctx, tx, s.chunks.name,
+		chunkKey(fileID, xbson.MinValue), chunkKey(fileID, xbson.MaxValue))
+	return err
+}
+
+// writeTx 自开一个写事务跑 fn，与集合句柄上的单条写入走同一条路（库句柄的进出、提交通知）。
+func (s *Storage) writeTx(ctx context.Context, fn func(context.Context, *xtx.Transaction) error) error {
+	db := s.chunks.db
+	ctx, box := db.notifyScope(ctx)
+	defer box.flush()
+	rel, err := db.enter(ctx)
+	if err != nil {
+		return err
+	}
+	defer rel()
+	return db.engine.InTx(ctx, func(tx *xtx.Transaction) error { return fn(ctx, tx) })
 }
 
 // baseName 去掉路径部分，两种分隔符都认。
@@ -254,7 +283,16 @@ func infoSeq(src iter.Seq2[*Document, error]) iter.Seq2[*FileInfo, error] {
 // SetMetadata 换掉一个文件的附带信息，文件不存在时返回 false 而不报错。
 //
 // 是整份替换，不是合并。
+//
+// 与同 ID 的写入者排同一个队（见 [Storage.OpenWrite]）：有写入流开着时等它 Close，
+// ctx 结束时返回 ctx 的错误。所以别在持有同 ID 写入流的 goroutine 里调用它，
+// 那会一直等到 ctx 结束。
 func (s *Storage) SetMetadata(ctx context.Context, id *Value, metadata *Document) (bool, error) {
+	lock, err := s.lockFile(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	defer s.unlockFile(lock)
 	info, err := s.FindByID(ctx, id)
 	if errors.Is(err, ErrFileNotFound) {
 		return false, nil
@@ -278,7 +316,16 @@ func (s *Storage) SetMetadata(ctx context.Context, id *Value, metadata *Document
 //
 // 先删描述再删块：中途失败留下的是一堆没人引用的块，而不是一个读到一半
 // 就报缺块的文件。
+//
+// 与同 ID 的写入者排同一个队（见 [Storage.OpenWrite]）：有写入流开着时等它 Close，
+// 免得删完之后写入者又把描述与后面的块写回来；ctx 结束时返回 ctx 的错误。
+// 在持有同 ID 写入流的 goroutine 里调用它会一直等到 ctx 结束。
 func (s *Storage) Delete(ctx context.Context, id *Value) (bool, error) {
+	lock, err := s.lockFile(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	defer s.unlockFile(lock)
 	info, err := s.FindByID(ctx, id)
 	if errors.Is(err, ErrFileNotFound) {
 		return false, nil
@@ -296,6 +343,8 @@ func (s *Storage) Delete(ctx context.Context, id *Value) (bool, error) {
 //
 // 删完已知的 count 块之后**继续往后试**，直到某一批一个都没删着：
 // 文件被覆盖成更短的一份时，上一次留下的尾巴就靠这一段清掉。
+//
+// 它不取文件锁：调用方（Delete、OpenWrite）已经占着，再取一次就是自己等自己。
 func (s *Storage) deleteChunks(ctx context.Context, fileID *Value, count int32) error {
 	ids := make([]*Value, 0, chunkDeleteBatch)
 	next := int32(0)
@@ -330,13 +379,75 @@ func (s *Storage) deleteChunks(ctx context.Context, fileID *Value, count int32) 
 	}
 }
 
+// fileLockSet 是本句柄上正在写的文件表，让同一个文件同一时刻只有一个写入者
+// （写入流、Delete 或 SetMetadata）。
+//
+// 在途的写入不会多，线性扫一遍就够。集合名不分大小写、ID 按排序规则比，
+// 与库里认集合和主键的方式一致：写法不同却落到同一批块上的两个写入者也得排队。
+type fileLockSet struct {
+	mu    sync.Mutex
+	items []*fileLock
+}
+
+// fileLock 是一个写入者占着的文件，done 在放锁时关掉，唤醒排队的人。
+type fileLock struct {
+	files string
+	id    *Value
+	done  chan struct{}
+}
+
+// acquire 占住 files 集合里的 id，被别人占着时等它放掉或 ctx 结束。
+func (s *fileLockSet) acquire(ctx context.Context, files string, id *Value, c Collation) (*fileLock, error) {
+	for {
+		s.mu.Lock()
+		i := slices.IndexFunc(s.items, func(l *fileLock) bool {
+			return strings.EqualFold(l.files, files) && l.id.Equal(id, c)
+		})
+		if i < 0 {
+			l := &fileLock{files: files, id: id, done: make(chan struct{})}
+			s.items = append(s.items, l)
+			s.mu.Unlock()
+			return l, nil
+		}
+		done := s.items[i].done
+		s.mu.Unlock()
+
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// release 放掉 acquire 拿到的锁。
+func (s *fileLockSet) release(l *fileLock) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = slices.DeleteFunc(s.items, func(x *fileLock) bool { return x == l })
+	close(l.done)
+}
+
+// lockFile 占住本存储里的 id，写入者、Delete 与 SetMetadata 都排这一个队。
+func (s *Storage) lockFile(ctx context.Context, id *Value) (*fileLock, error) {
+	return s.files.db.fileLocks.acquire(ctx, s.files.name, id, s.files.db.Collation())
+}
+
+// unlockFile 放掉 lockFile 拿到的锁。
+func (s *Storage) unlockFile(l *fileLock) { s.files.db.fileLocks.release(l) }
+
 // OpenWrite 开始写一个文件，同 ID 的旧内容先删干净。
 //
 // ID 与文件名都不能空。metadata 为 nil 时保留原有的那份。
 //
 // 写入过程**不在一个事务里**：块是一边收一边插的。中途放弃会在库里留下
-// 一批孤块，下一次写同一个 ID 会把它们清掉。要整体成败一致，
-// 自己开一个事务把整个写入包起来。
+// 一批孤块，下一次写同一个 ID 会把它们清掉——描述已经不在了也一样：写第 0 块
+// （空文件是写描述）的那个事务先把这个 ID 名下残留的块整段删掉，见 [Storage.clearChunksIn]。
+//
+// 同一个 ID 的写入者**互斥**：从 OpenWrite 起一直占到 [FileWriter.Close]，
+// 其间别的 OpenWrite、[Storage.Delete] 与 [Storage.SetMetadata] 等着，ctx 结束时
+// 返回 ctx 的错误——所以写完一定要 Close，也别在持有写入流时对同一个 ID 调用它们。
+// 这把锁只在本进程的同一个 [DB] 句柄内有效。
 func (s *Storage) OpenWrite(ctx context.Context, id *Value, filename string, metadata *Document) (*FileWriter, error) {
 	if id == nil || id.IsNull() {
 		return nil, errors.New("xdoc: storage: file id is required")
@@ -346,11 +457,16 @@ func (s *Storage) OpenWrite(ctx context.Context, id *Value, filename string, met
 		return nil, errors.New("xdoc: storage: filename is required")
 	}
 	name := baseName(filename)
+	lock, err := s.lockFile(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	info, err := s.FindByID(ctx, id)
 	switch {
 	case errors.Is(err, ErrFileNotFound):
 		info = &FileInfo{ID: id, Metadata: xbson.NewDocument()}
 	case err != nil:
+		s.unlockFile(lock)
 		return nil, err
 	}
 	info.Filename = name
@@ -364,6 +480,7 @@ func (s *Storage) OpenWrite(ctx context.Context, id *Value, filename string, met
 
 	if info.Chunks > 0 || info.Length > 0 {
 		if err := s.deleteChunks(ctx, id, info.Chunks); err != nil {
+			s.unlockFile(lock)
 			return nil, err
 		}
 	}
@@ -374,6 +491,7 @@ func (s *Storage) OpenWrite(ctx context.Context, id *Value, filename string, met
 		ctx:  ctx,
 		info: info,
 		buf:  make([]byte, 0, ChunkSize),
+		lock: lock,
 	}, nil
 }
 
@@ -388,6 +506,17 @@ type FileWriter struct {
 	buf    []byte
 	closed bool
 	err    error
+
+	// lock 是 OpenWrite 占住的这个文件，放掉之后为 nil。
+	lock *fileLock
+}
+
+// unlock 放掉写锁，重复调用什么也不做。
+func (w *FileWriter) unlock() {
+	if w.lock != nil {
+		w.st.unlockFile(w.lock)
+		w.lock = nil
+	}
 }
 
 // FileInfo 返回当前的文件描述。
@@ -457,7 +586,21 @@ func (w *FileWriter) flushChunk() error {
 	doc.Set(xengine.IDField, chunkID(w.info.ID, w.info.Chunks))
 
 	doc.Set(chunkFieldData, xbson.Binary(w.buf))
-	if _, err := w.st.chunks.Insert(w.ctx, doc); err != nil {
+	if w.info.Chunks > 0 {
+		if _, err := w.st.chunks.Insert(w.ctx, doc); err != nil {
+			return err
+		}
+	} else if err := w.st.writeTx(w.ctx, func(ctx context.Context, tx *xtx.Transaction) error {
+		// 第 0 块：同一个事务里先清掉这个 ID 名下的孤块再插。描述不在时 OpenWrite 不删块，
+		// 描述在时它的向后探测也跳不过序号的空洞，残留的块只有这里兜得住。
+		// 不另开事务探测：那会多占一个事务号，没有孤块时的落盘字节就变了。
+		if err := w.st.clearChunksIn(ctx, tx, w.info.ID); err != nil {
+			return err
+		}
+		c := w.st.chunks
+		_, err := c.db.engine.InsertIn(ctx, tx, c.name, []*Document{doc}, c.auto)
+		return err
+	}); err != nil {
 		return err
 	}
 	w.info.Chunks++
@@ -488,15 +631,26 @@ func (w *FileWriter) Flush() error {
 	return nil
 }
 
-// writeInfo 写入文件描述，上传时刻取当下。
+// writeInfo 写入文件描述，上传时刻取当下（经库的时钟，测试里可以换掉）。
 func (w *FileWriter) writeInfo() error {
-	w.info.UploadDate = time.Now()
+	w.info.UploadDate = w.st.files.db.opts.nowOrDefault()
 	d, err := w.info.document()
 	if err != nil {
 		return err
 	}
-	_, err = w.st.files.Upsert(w.ctx, d)
-	return err
+	if w.info.Chunks > 0 {
+		_, err = w.st.files.Upsert(w.ctx, d)
+		return err
+	}
+	// 一块都没写，没有第 0 块的事务可借，孤块就在写描述的这个事务里清。
+	// 先写描述再探测：只读快照开在写完之后，没有孤块时这个事务写出的页与只写描述时一样。
+	return w.st.writeTx(w.ctx, func(ctx context.Context, tx *xtx.Transaction) error {
+		f := w.st.files
+		if _, err := f.db.engine.UpsertIn(ctx, tx, f.name, []*Document{d}, f.auto); err != nil {
+			return err
+		}
+		return w.st.clearChunksIn(ctx, tx, w.info.ID)
+	})
 }
 
 // Close 落下最后一块并写入文件描述。
@@ -504,12 +658,13 @@ func (w *FileWriter) writeInfo() error {
 // **不写完不算数**：没有 Close（或 Flush）过的文件，描述里的长度与块数
 // 还是上一次的值。
 //
-// 重复调用返回同一个结果，不会重复写。
+// 重复调用返回同一个结果，不会重复写。成败都会放掉同 ID 的写锁。
 func (w *FileWriter) Close() error {
 	if w.closed {
 		return w.err
 	}
 	w.closed = true
+	defer w.unlock()
 	if w.err != nil {
 		return w.err
 	}
@@ -538,6 +693,7 @@ func (s *Storage) Upload(ctx context.Context, id *Value, filename string, r io.R
 	}
 	if _, err := w.ReadFrom(r); err != nil {
 		w.closed = true
+		w.unlock()
 		return nil, err
 	}
 	if err := w.Close(); err != nil {

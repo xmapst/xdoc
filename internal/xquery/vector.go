@@ -91,7 +91,7 @@ func (o *opVector) execute(p xstore.Pages, _ *xpage.CollectionIndex,
 //
 // 最后要求索引表达式与查询里写的一致，且**维数完全相同**。
 func (o *optimizer) trySelectVectorIndex() (*candidate, error) {
-	if o.cp == nil || len(o.cp.VectorIndexes()) == 0 {
+	if o.cp == nil || o.q.PrimaryOnly || len(o.cp.VectorIndexes()) == 0 {
 		return nil, nil
 	}
 	var (

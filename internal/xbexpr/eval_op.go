@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"time"
 	"unicode"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/xmapst/xdoc/internal/xbin"
 	"github.com/xmapst/xdoc/internal/xbson"
@@ -197,38 +199,71 @@ func opIn(left, right *xbson.Value, coll xcoll.Collation) *xbson.Value {
 //
 // 大小写是否折叠由排序规则说了算：序数规则直接按码元比（必要时折一次大小写），
 // 其余交给排序规则逐个字符比。代理对码元不参与折叠，只按相等比。
+//
+// 码元是边解 UTF-8 边按需产出的，不整份转成 UTF-16，匹配一次不分配。
 func sqlLike(s, pattern string, coll xcoll.Collation) bool {
-	fold := coll.Equal("a", "A")
 	fast := coll.Ordinal()
-	su, pu := utf16Of(s), utf16Of(pattern)
+	// 折叠只在序数快路上用得着，而序数规则下它就是“忽略大小写”，不必现比一回。
+	fold := fast && !coll.SameLengthWhenEqual()
 
-	var i, j int
-	star, retry := -1, 0
-	for i < len(su) {
+	var i, j unitPos
+	star, retry := unitPos{off: -1}, unitPos{}
+	for i.off < len(s) {
+		su, ni := nextUnit(s, i)
+		pu, nj := uint16(0), j
+		hasP := j.off < len(pattern)
+		if hasP {
+			pu, nj = nextUnit(pattern, j)
+		}
 		switch {
-		case j < len(pu) && pu[j] == '_':
-			i++
-			j++
-		case j < len(pu) && pu[j] == '%':
+		case hasP && pu == '_':
+			i, j = ni, nj
+		case hasP && pu == '%':
 			star = j
 			retry = i
-			j++
-		case j < len(pu) && unitEqual(su[i], pu[j], coll, fold, fast):
-			i++
-			j++
-		case star >= 0:
-			retry++
+			j = nj
+		case hasP && unitEqual(su, pu, coll, fold, fast):
+			i, j = ni, nj
+		case star.off >= 0:
+			_, retry = nextUnit(s, retry)
 			i = retry
-			j = star + 1
+			_, j = nextUnit(pattern, star)
 		default:
 			return false
 		}
 	}
 
-	for j < len(pu) && pu[j] == '%' {
-		j++
+	// '%' 是单字节；停在低位代理上时那个字节是四字节序列的首字节，不会误认。
+	for j.off < len(pattern) && pattern[j.off] == '%' {
+		j.off++
 	}
-	return j == len(pu)
+	return j.off == len(pattern)
+}
+
+// unitPos 是 UTF-8 串里某个 UTF-16 码元的位置。
+//
+// off 是字符的起始字节；low 为真表示停在辅助平面字符的低位代理上。
+type unitPos struct {
+	off int
+	low bool
+}
+
+// nextUnit 取 p 处的码元，并给出下一个码元的位置。p 不能在串尾。
+//
+// 非法 UTF-8 字节逐个当成 U+FFFD，与 utf16.Encode([]rune(s)) 的结果一致。
+func nextUnit(s string, p unitPos) (uint16, unitPos) {
+	if c := s[p.off]; c < utf8.RuneSelf {
+		return uint16(c), unitPos{off: p.off + 1}
+	}
+	r, size := utf8.DecodeRuneInString(s[p.off:])
+	if r < 0x10000 {
+		return uint16(r), unitPos{off: p.off + size}
+	}
+	hi, lo := utf16.EncodeRune(r)
+	if p.low {
+		return uint16(lo), unitPos{off: p.off + size}
+	}
+	return uint16(hi), unitPos{off: p.off, low: true}
 }
 
 // unitEqual 比较两个 UTF-16 码元是否相等，fold 决定折不折大小写，fast 走序数快路。

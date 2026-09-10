@@ -612,7 +612,7 @@ func (o *opIn) keyOrdered() bool { return false }
 
 // cost 是单次等值查的代价乘以值的个数。
 func (o *opIn) cost(ix *xpage.CollectionIndex) uint32 {
-	unit := uint32(costEquals)
+	unit := costEquals
 	if ix.Unique {
 		unit = costEqualsUnique
 	}

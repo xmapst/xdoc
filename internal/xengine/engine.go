@@ -100,6 +100,9 @@ type Engine struct {
 	//
 	// 进程重启后第一次要用时从索引里现查最大主键，见 [Engine.lastID]。
 	seq map[string]int64
+
+	// obs 旁听写入与自开事务的结局，见 [Engine.SetObserver]。
+	obs Observer
 }
 
 // New 造一个文档层引擎。
@@ -180,11 +183,12 @@ func (e *Engine) inTx(ctx context.Context, fn func(tx *xtx.Transaction) error) e
 		return err
 	}
 
-	done := false
+	done, committed := false, false
 	defer func() {
 		if !done {
 			_ = tx.Rollback()
 		}
+		e.finished(ctx, tx, committed)
 	}()
 	if err := fn(tx); err != nil {
 		done = true
@@ -196,7 +200,11 @@ func (e *Engine) inTx(ctx context.Context, fn func(tx *xtx.Transaction) error) e
 		return errors.Join(err, tx.Rollback())
 	}
 	done = true
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 // oneShot 是 [Engine.inTx] 的带计数版本。事务失败时计数一律归零。
@@ -211,6 +219,11 @@ func (e *Engine) oneShot(ctx context.Context, fn func(*xtx.Transaction) (int, er
 		return 0, err
 	}
 	return n, nil
+}
+
+// InTx 是导出的 [Engine.inTx]，给要把几步写入并进同一个事务的调用方用。
+func (e *Engine) InTx(ctx context.Context, fn func(tx *xtx.Transaction) error) error {
+	return e.inTx(ctx, fn)
 }
 
 // writeSnapshot 取一份可写快照，必要时把集合和主键索引一并建出来。
